@@ -245,6 +245,7 @@ nav button b{font-size:20px}
 <label class="field" style="flex:1"><span>Main role</span><select id="role1" onchange="setRoles()"></select></label>
 <label class="field" style="flex:1"><span>Second role</span><select id="role2" onchange="setRoles()"></select></label>
 </div>
+<div id="priorityInfo" class="rec" style="display:none;flex-direction:column;align-items:flex-start;gap:4px"></div>
 <div id="slotBox" style="display:none">
 <div class="label" style="text-align:left">Your picks</div>
 <div id="slotList"></div>
@@ -1564,6 +1565,10 @@ async function renderLobby(phase) {
     return `<div class="slot${isMe ? " me" : ""}"><img class="icon" src="${profileIcon(m.summonerIconId)}"><div><b>${esc(name)}</b>${m.isLeader ? " 👑" : ""}<br><small>${esc(roles)}</small><br>${kick}</div></div>`;
   }).join("");
 
+  scarce = Array.isArray(l.scarcePositions) ? l.scarcePositions : [];
+  posRestricted = (l.restrictions || []).some(r => r.restrictionCode === "QPPlayerScarcePositionCoverageRestriction");
+  renderPriority();
+
   const showRoles = !!l.gameConfig.showPositionSelector;
   document.getElementById("roleBox").style.display = showRoles ? "flex" : "none";
   if (showRoles) {
@@ -1599,6 +1604,33 @@ async function renderLobby(phase) {
 
 let curSlots = [];
 let slotKey = "";
+let scarce = [];
+let posRestricted = false;
+
+function roleLabel(v) {
+  const r = ROLES.find(x => x[0] === v);
+  return r ? r[1] : v;
+}
+
+function renderPriority() {
+  const box = document.getElementById("priorityInfo");
+  if (!scarce.length) {
+    box.style.display = "none";
+    return;
+  }
+  box.style.display = "flex";
+  const list = scarce.map(roleLabel).join(" & ");
+  box.innerHTML = `<div><b style="color:var(--gold)">⭐ Priority roles: ${esc(list)}</b></div>`
+    + (posRestricted
+      ? `<div style="color:var(--red);font-size:14px">One of your picks has to be ${esc(scarce.map(roleLabel).join(" or "))} before you can find a match.</div>`
+      : `<div class="muted" style="font-size:14px">These roles get you into games faster.</div>`);
+
+  ["role1", "role2"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    [...sel.options].forEach(o => o.textContent = roleLabel(o.value) + (scarce.includes(o.value) ? " ⭐" : ""));
+  });
+}
 let ownedSkinList = null;
 let playerNames = {};
 let skinCache = {};
@@ -1698,7 +1730,7 @@ function renderChampPicker(i) {
 }
 
 async function renderSlots(slots) {
-  const key = JSON.stringify(slots);
+  const key = JSON.stringify(slots) + scarce.join();
   if (key === slotKey) return;
   const active = document.activeElement;
   if (active && document.getElementById("slotBox").contains(active) && active.tagName !== "BUTTON") return;
@@ -1714,7 +1746,7 @@ async function renderSlots(slots) {
   const spellList = availableSpells();
 
   document.getElementById("slotList").innerHTML = slots.map((s, i) => {
-    const roles = roleList.map(([v, t]) => `<option value="${v}" ${v === s.positionPreference ? "selected" : ""}>${t}</option>`).join("");
+    const roles = roleList.map(([v, t]) => `<option value="${v}" ${v === s.positionPreference ? "selected" : ""}>${t}${scarce.includes(v) ? " ⭐" : ""}</option>`).join("");
     const skinName = skinLabel(s.championId, s.skinId);
     const spells = n => spellList.map(sp => `<option value="${sp.id}" ${sp.id === s["spell" + n] ? "selected" : ""}>${esc(sp.name)}</option>`).join("");
     let keystone = 0;
@@ -1915,7 +1947,12 @@ async function act(url, okText) {
   const res = await fetch(url, { method: "POST" });
   const result = await res.text();
   if (result !== "ok") {
-    alert(result);
+    if (result.includes("GATEKEEPER_RESTRICTED") && scarce.length)
+      alert("League needs one of your picks to be a priority role: " + scarce.map(roleLabel).join(" or ") + ".");
+    else if (result.includes("GATEKEEPER_RESTRICTED"))
+      alert("League won't let you queue right now (a queue restriction or penalty is active). Check the client for details.");
+    else
+      alert(result);
     return false;
   }
   if (okText) flash(okText);
@@ -1932,6 +1969,10 @@ function leaveLobby() {
 }
 
 function findMatch() {
+  if (!searching && posRestricted && scarce.length) {
+    alert("League needs one of your picks to be a priority role: " + scarce.map(roleLabel).join(" or ") + ".\n\nChange the role on one of your picks, then tap Find match again.");
+    return;
+  }
   act(searching ? "/lobby/cancel" : "/lobby/search", "");
 }
 
