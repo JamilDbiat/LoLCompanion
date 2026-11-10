@@ -13,6 +13,7 @@ namespace LeagueHelper
 <meta name="apple-mobile-web-app-title" content="LoL Companion">
 <meta name="theme-color" content="#120a1f">
 <title>LoL Companion</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
 :root{--bg:#120a1f;--card:#1a0f2c;--card2:#22143a;--line:rgba(232,184,74,.2);--gold:#e8b84a;--gold2:#f5e6c4;--text:#f1e9ff;--muted:#a993c9;--red:#e84057;--green:#1fae5b;--blue:#7c3aed}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -196,6 +197,12 @@ button:active { transform: scale(.97); }
 #viewStage img.splash{height:100%;width:auto;max-width:none;display:block;animation:fade .3s}
 #viewStage img.load{max-height:100%;max-width:100%;margin:auto;display:block;animation:fade .3s}
 #viewStage .threeD{margin:auto;text-align:center;padding:24px;max-width:360px}
+#viewStage.three{overflow:hidden;position:relative;background:radial-gradient(circle at 50% 40%,#2a1450,#0b0614 75%)}
+#viewStage canvas{display:block;touch-action:none}
+.threeBtns{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+.threeBtns button{width:auto;margin:0;padding:8px 12px;font-size:12px}
+.pbadge{display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;color:#fff;border-radius:50%}
+.ptag{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:6px;color:#fff;margin-left:6px;vertical-align:middle}
 nav button{font-size:11px}
 nav button b{font-size:20px}
 </style>
@@ -562,7 +569,13 @@ async function setWard(id) {
 async function loadNames() {
   const all = await getJson("/allchampions");
   names = {};
-  all.forEach(c => { if (c.id > 0) names[c.id] = c.name; });
+  aliases = {};
+  all.forEach(c => {
+    if (c.id > 0) {
+      names[c.id] = c.name;
+      aliases[c.id] = c.alias;
+    }
+  });
 }
 
 async function loadSpells() {
@@ -1307,7 +1320,33 @@ function roleName(r) {
 }
 
 function profileIcon(id) {
-  return ASSET("/lol-game-data/assets/v1/profile-icons/" + (id || 29) + ".jpg");
+  return ASSET("/lol-game-data/assets/v1/profile-icons/" + (id > 0 ? id : 29) + ".jpg");
+}
+
+const PLATFORMS = {
+  discord: ["Discord", "#5865F2"],
+  valorant: ["VALORANT", "#ff4655"],
+  wildrift: ["Wild Rift", "#2f7de1"],
+  tft: ["TFT", "#e8b84a"],
+  bacon: ["Runeterra", "#c28b37"],
+  lion: ["2XKO", "#ff6a00"]
+};
+
+function friendPlatform(f) {
+  if (f.product && f.product !== "league_of_legends" && PLATFORMS[f.product]) return f.product;
+  if (f.relationshipOnRiot === "none" && f.discordInfo) return "discord";
+  return "";
+}
+
+function friendName(f) {
+  return f.gameName || f.name || (f.discordInfo && f.discordInfo.displayName) || "Friend";
+}
+
+function friendAvatar(f) {
+  const p = friendPlatform(f);
+  if (f.icon > 0) return `<img class="icon" loading="lazy" src="${profileIcon(f.icon)}">`;
+  const color = p ? PLATFORMS[p][1] : "#3a2560";
+  return `<div class="icon pbadge" style="background:${color}">${esc(friendName(f).charAt(0).toUpperCase())}</div>`;
 }
 
 async function loadQueues() {
@@ -1398,7 +1437,7 @@ async function openChat(encodedId) {
     meId = m.id || "";
   }
   const f = friends.find(x => x.id === dmId) || {};
-  document.getElementById("dmName").textContent = f.gameName || f.name || "Friend";
+  document.getElementById("dmName").textContent = friendName(f);
   document.getElementById("dmStatus").textContent = friendStatus(f);
   document.getElementById("dmIcon").src = profileIcon(f.icon);
   document.getElementById("dmBox").innerHTML = "";
@@ -1442,8 +1481,14 @@ async function sendDm() {
 }
 
 function friendStatus(f) {
+  const p = friendPlatform(f);
+  if (p === "discord") {
+    const s = (f.discordInfo && f.discordInfo.onlineStatus) || f.discordOnlineStatus || "offline";
+    return "Discord · " + s.charAt(0).toUpperCase() + s.slice(1);
+  }
   if (f.availability === "offline") return "Offline";
   if (f.availability === "mobile") return "Mobile";
+  if (p) return "Playing " + PLATFORMS[p][0];
   const status = f.lol && f.lol.gameStatus;
   if (status && status.startsWith("hosting")) return "In lobby";
   return GAME_STATUS[status] || (f.availability === "away" ? "Away" : "Online");
@@ -1454,15 +1499,22 @@ function renderFriends() {
   const online = friends.filter(f => f.availability !== "offline" && f.availability !== "mobile").length;
   document.getElementById("friendCount").textContent = friends.length ? "· " + online + " online" : "";
 
+  const discordText = f => (f.discordInfo && f.discordInfo.displayName) || "";
   const list = friends
-    .filter(f => (f.gameName || f.name || "").toLowerCase().includes(q))
-    .sort((x, y) => (ONLINE_ORDER[x.availability] ?? 3) - (ONLINE_ORDER[y.availability] ?? 3) || (x.gameName || "").localeCompare(y.gameName || ""));
+    .filter(f => (friendName(f) + " " + discordText(f)).toLowerCase().includes(q))
+    .sort((x, y) => (ONLINE_ORDER[x.availability] ?? 3) - (ONLINE_ORDER[y.availability] ?? 3) || friendName(x).localeCompare(friendName(y)));
 
   document.getElementById("friendList").innerHTML = list.length ? list.map(f => {
-    const off = f.availability === "offline" || f.availability === "mobile";
-    const button = off ? "" : `<button class="mini" onclick="event.stopPropagation();invite(${f.summonerId})">Invite</button>`;
+    const p = friendPlatform(f);
+    const discordOnline = p === "discord" && ((f.discordInfo && f.discordInfo.onlineStatus) || "offline") !== "offline";
+    const off = !discordOnline && (f.availability === "offline" || f.availability === "mobile");
+    const canInvite = !off && !p && f.summonerId > 0;
+    const button = canInvite ? `<button class="mini" onclick="event.stopPropagation();invite(${f.summonerId})">Invite</button>` : "";
     const badge = unread[f.id] ? `<span class="badge">${unread[f.id]}</span>` : "";
-    return `<div class="slot friend${off ? " faded" : ""}" onclick="openChat('${encodeURIComponent(f.id)}')"><img class="icon" src="${profileIcon(f.icon)}"><div style="flex:1"><b>${esc(f.gameName || f.name || "Friend")}</b>${badge}<br><small>${friendStatus(f)}</small></div>${button}</div>`;
+    const tag = p ? `<span class="ptag" style="background:${PLATFORMS[p][1]}">${PLATFORMS[p][0]}</span>` : "";
+    const dName = discordText(f);
+    const extra = dName && dName !== friendName(f) ? ` · ${esc(dName)}` : "";
+    return `<div class="slot friend${off ? " faded" : ""}" onclick="openChat('${encodeURIComponent(f.id)}')">${friendAvatar(f)}<div style="flex:1;min-width:0"><b>${esc(friendName(f))}</b>${tag}${badge}<br><small>${friendStatus(f)}${extra}</small></div>${button}</div>`;
   }).join("") : `<p class="muted">No friends found.</p>`;
 }
 
@@ -1602,12 +1654,221 @@ async function loadProfile() {
 
 let viewItem = null;
 let colShown = [];
+let aliases = {};
+let three = null;
+const CDRAGON = "https://raw.communitydragon.org/latest/game/";
+
+function stop3D() {
+  if (!three) return;
+  cancelAnimationFrame(three.frame);
+  three.renderer.dispose();
+  three = null;
+}
+
+function parseSkn(buffer) {
+  const v = new DataView(buffer);
+  let o = 0;
+  const u32 = () => { const x = v.getUint32(o, true); o += 4; return x; };
+  if (u32() !== 0x00112233) throw new Error("Not a model file");
+  const major = v.getUint16(o, true);
+  o += 4;
+
+  const submeshes = [];
+  let indexCount = 0;
+  let vertexCount = 0;
+  let stride = 52;
+
+  if (major === 0) {
+    indexCount = u32();
+    vertexCount = u32();
+  } else {
+    const count = u32();
+    for (let i = 0; i < count; i++) {
+      let name = "";
+      for (let c = 0; c < 64; c++) {
+        const ch = v.getUint8(o + c);
+        if (ch === 0) break;
+        name += String.fromCharCode(ch);
+      }
+      o += 64;
+      submeshes.push({ name, startVertex: u32(), vertexCount: u32(), startIndex: u32(), indexCount: u32() });
+    }
+    if (major === 4) o += 4;
+    indexCount = u32();
+    vertexCount = u32();
+    if (major === 4) {
+      stride = u32();
+      o += 4 + 24 + 16;
+    }
+  }
+
+  const indices = new Uint32Array(indexCount);
+  for (let i = 0; i < indexCount; i++) indices[i] = v.getUint16(o + i * 2, true);
+  o += indexCount * 2;
+
+  const positions = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  for (let i = 0; i < vertexCount; i++) {
+    const b = o + i * stride;
+    positions[i * 3] = v.getFloat32(b, true);
+    positions[i * 3 + 1] = v.getFloat32(b + 4, true);
+    positions[i * 3 + 2] = v.getFloat32(b + 8, true);
+    uvs[i * 2] = v.getFloat32(b + 44, true);
+    uvs[i * 2 + 1] = v.getFloat32(b + 48, true);
+  }
+
+  submeshes.forEach(s => {
+    if (!s.startVertex) return;
+    let max = 0;
+    for (let i = s.startIndex; i < s.startIndex + s.indexCount; i++) max = Math.max(max, indices[i]);
+    if (max < s.vertexCount)
+      for (let i = s.startIndex; i < s.startIndex + s.indexCount; i++) indices[i] += s.startVertex;
+  });
+
+  if (!submeshes.length) submeshes.push({ name: "Base", startIndex: 0, indexCount });
+  return { positions, uvs, indices, submeshes };
+}
+
+function cdragonPath(path, png) {
+  let p = path.toLowerCase();
+  if (png) p = p.replace(/\.(tex|dds)$/, ".png");
+  return CDRAGON + p;
+}
+
+async function show3D() {
+  stop3D();
+  const stage = document.getElementById("viewStage");
+  const hint = document.getElementById("viewHint");
+  stage.className = "three";
+  stage.innerHTML = `<div class="spinner" style="margin:auto"></div>`;
+  hint.textContent = "Loading 3D model...";
+
+  const alias = aliases[viewItem.champ];
+  const skinNum = viewItem.id % 1000;
+  const myView = viewItem;
+
+  try {
+    const THREE = await import("three");
+    const { OrbitControls } = await import("three/addons/controls/OrbitControls.js");
+
+    const bin = await (await fetch(CDRAGON + "data/characters/" + alias.toLowerCase() + "/skins/skin" + skinNum + ".bin.json")).json();
+    let props = null;
+    for (const key in bin) if (bin[key] && bin[key].skinMeshProperties) { props = bin[key].skinMeshProperties; break; }
+    if (!props || !props.simpleSkin) throw new Error("No model");
+
+    const model = parseSkn(await (await fetch(cdragonPath(props.simpleSkin, false))).arrayBuffer());
+    if (viewItem !== myView) return;
+
+    const hidden = (props.initialSubmeshToHide || "").toLowerCase().split(/[\s,]+/).filter(x => x);
+    const materialTexture = name => {
+      const mat = name && bin[name];
+      if (!mat || !Array.isArray(mat.samplerValues)) return "";
+      const paths = mat.samplerValues.map(s => s.texturePath || s.textureName || "").filter(p => p.endsWith(".tex") || p.endsWith(".dds"));
+      return paths.find(p => /_tx_cm\.(tex|dds)$/.test(p) && !p.includes("/shared/")) || paths.find(p => !p.includes("/shared/")) || "";
+    };
+    const baseTexture = props.texture || materialTexture(props.material || props.Material);
+    const overrides = {};
+    (props.materialOverride || []).forEach(m => {
+      if (!m.submesh) return;
+      const tex = m.texture || materialTexture(m.material || m.Material);
+      if (tex) overrides[m.submesh.toLowerCase()] = tex;
+    });
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(model.positions, 3));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(model.uvs, 2));
+    geometry.setIndex(new THREE.BufferAttribute(model.indices, 1));
+
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin("anonymous");
+    const textures = {};
+    const textureFor = path => {
+      if (!path) return null;
+      if (!textures[path]) {
+        const t = loader.load(cdragonPath(path, true));
+        t.flipY = false;
+        t.colorSpace = THREE.SRGBColorSpace;
+        textures[path] = t;
+      }
+      return textures[path];
+    };
+
+    const materials = [];
+    model.submeshes.forEach(s => {
+      const name = s.name.toLowerCase();
+      const visible = !hidden.includes(name);
+      const mat = new THREE.MeshBasicMaterial({ map: textureFor(overrides[name] || baseTexture), side: THREE.DoubleSide, alphaTest: 0.3, visible });
+      geometry.addGroup(s.startIndex, s.indexCount, materials.length);
+      materials.push(mat);
+    });
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.scale.x = -1;
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    center.x = -center.x;
+
+    const width = stage.clientWidth;
+    const height = stage.clientHeight;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(width, height);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.add(mesh);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 1, 100000);
+    const distance = Math.max(size.x, size.y, size.z) * 1.6;
+    camera.position.set(center.x, center.y + size.y * 0.1, center.z + distance);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.copy(center);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 2;
+    controls.minDistance = distance * 0.2;
+    controls.maxDistance = distance * 3;
+    controls.update();
+    controls.addEventListener("start", () => controls.autoRotate = false);
+
+    stage.innerHTML = "";
+    stage.appendChild(renderer.domElement);
+    const buttons = document.createElement("div");
+    buttons.className = "threeBtns";
+    buttons.innerHTML = `<button class="ghost" id="spinBtn">⟳ Spin</button><button class="ghost" id="resetBtn">Reset</button>`;
+    stage.appendChild(buttons);
+    document.getElementById("spinBtn").onclick = () => controls.autoRotate = !controls.autoRotate;
+    document.getElementById("resetBtn").onclick = () => {
+      camera.position.set(center.x, center.y + size.y * 0.1, center.z + distance);
+      controls.target.copy(center);
+      controls.autoRotate = true;
+    };
+
+    three = { renderer, frame: 0 };
+    const animate = () => {
+      if (!three) return;
+      controls.update();
+      renderer.render(scene, camera);
+      three.frame = requestAnimationFrame(animate);
+    };
+    animate();
+    hint.textContent = "Drag to rotate · pinch to zoom · two fingers to move";
+  } catch (e) {
+    if (viewItem !== myView) return;
+    stage.innerHTML = `<div class="threeD"><div class="big">3D model not available</div><p class="muted">Couldn't load a 3D model for ${esc(viewItem.name)}. Check that your phone has internet.</p></div>`;
+    hint.textContent = "";
+  }
+}
 
 function openViewer(source, i) {
   const list = source === "col" ? colShown : source === "store" ? storeSkins : ysOffers;
   const s = list[i];
   if (!s) return;
-  viewItem = { name: s.name || s.skinName || "", rarity: s.rarity, splash: s.splash || s.image, load: s.load, champ: s.champ || s.championId, price: s.price || s.discountPrice };
+  viewItem = { id: s.id || s.skinId, name: s.name || s.skinName || "", rarity: s.rarity, splash: s.splash || s.image, load: s.load, champ: s.champ || s.championId, price: s.price || s.discountPrice };
   const r = RARITY[viewItem.rarity];
   const parts = [names[viewItem.champ] || "", r ? r[0] : "", viewItem.price ? viewItem.price + " RP" : ""].filter(x => x);
   document.getElementById("viewName").textContent = viewItem.name;
@@ -1618,6 +1879,8 @@ function openViewer(source, i) {
 }
 
 function closeViewer() {
+  stop3D();
+  viewItem = null;
   document.getElementById("viewer").classList.remove("on");
   document.getElementById("viewStage").innerHTML = "";
 }
@@ -1626,6 +1889,8 @@ function viewMode(mode) {
   ["viewSplash", "viewLoad", "view3d"].forEach(id => document.getElementById(id).className = "");
   const stage = document.getElementById("viewStage");
   const hint = document.getElementById("viewHint");
+  stop3D();
+  stage.className = "";
 
   if (mode === "splash") {
     document.getElementById("viewSplash").className = "on";
@@ -1640,8 +1905,7 @@ function viewMode(mode) {
     hint.textContent = "Loading screen art";
   } else {
     document.getElementById("view3d").className = "on";
-    stage.innerHTML = `<div class="threeD"><div class="lootIcon" style="width:110px;margin:0 auto 14px">🧊</div><div class="big">See it in 3D</div><p class="muted">League doesn't share 3D models with other apps, so this opens <b>Khada</b>, a free 3D viewer for League. You can rotate, zoom and play the animations there.</p><p>Search for <b>${esc(viewItem.name)}</b></p><a href="https://modelviewer.lol" target="_blank" rel="noopener"><button class="green">Open 3D viewer</button></a></div>`;
-    hint.textContent = "Opens in your browser";
+    show3D();
   }
 }
 
