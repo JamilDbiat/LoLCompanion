@@ -1387,7 +1387,7 @@ async function renderLobby(phase) {
   document.getElementById("lobbyQueue").textContent = queues[l.gameConfig.queueId] || "Lobby";
 
   document.getElementById("lobbyMembers").innerHTML = (l.members || []).map(m => {
-    const name = m.gameName || m.summonerName || "Player";
+    const name = memberName(m);
     const roles = [m.firstPositionPreference, m.secondPositionPreference].map(roleName).filter(r => r && r !== "None").join(" / ");
     const isMe = m.summonerId === me.summonerId;
     const kick = me.isLeader && !isMe ? `<button class="mini red" onclick="kick(${m.summonerId})">Kick</button>` : "";
@@ -1430,6 +1430,40 @@ async function renderLobby(phase) {
 let curSlots = [];
 let slotKey = "";
 let ownedSkinList = null;
+let playerNames = {};
+
+function memberName(m) {
+  if (m.gameName) return m.gameName;
+  if (m.summonerName) return m.summonerName;
+  if (!m.puuid) return "Player";
+  if (playerNames[m.puuid]) return playerNames[m.puuid];
+  const f = friends.find(x => x.puuid === m.puuid);
+  if (f) return friendName(f);
+  playerNames[m.puuid] = "...";
+  getJson("/player/" + encodeURIComponent(m.puuid)).then(p => {
+    playerNames[m.puuid] = p.gameName ? p.gameName + " #" + p.tagLine : "Player";
+  });
+  return "...";
+}
+
+function openChampPicker(i) {
+  document.getElementById("sheetBody").innerHTML = `<div class="big center">Pick a champion</div>
+    <input id="pickSearch" placeholder="Search..." oninput="renderChampPicker(${i})" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div id="pickGrid" class="colGrid" style="margin-top:10px;grid-template-columns:repeat(auto-fill,minmax(72px,1fr))"></div>
+    <button class="ghost" onclick="closeSheet()">Cancel</button>`;
+  document.getElementById("sheet").classList.add("on");
+  renderChampPicker(i);
+}
+
+function renderChampPicker(i) {
+  const q = document.getElementById("pickSearch").value.toLowerCase().trim();
+  const taken = curSlots[i] ? curSlots[i].championId : 0;
+  document.getElementById("pickGrid").innerHTML = Object.entries(champs)
+    .filter(([name]) => name.toLowerCase().includes(q))
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, id]) => `<div class="colItem" onclick="closeSheet();updateSlot(${i},{championId:${id},skinId:${id * 1000}})"><img loading="lazy" src="${ICON(id)}" class="${id === taken ? "selected" : ""}"><div class="colName">${esc(name)}</div></div>`)
+    .join("") || `<p class="muted center">No champions found.</p>`;
+}
 
 async function renderSlots(slots) {
   const key = JSON.stringify(slots);
@@ -1458,11 +1492,11 @@ async function renderSlots(slots) {
     let keystone = 0;
     try { keystone = JSON.parse(s.perks || "{}").perkIds[0]; } catch (e) { }
     return `<div class="rec" style="align-items:flex-start">
-      <img class="keystone" style="border-radius:12px" src="${ICON(s.championId)}">
+      <img class="keystone" style="border-radius:12px;cursor:pointer" src="${ICON(s.championId)}" onclick="openChampPicker(${i})">
       <div style="flex:1;min-width:0">
         <div class="spellSlots">
           <select onchange="updateSlot(${i},{positionPreference:this.value})">${roles}</select>
-          <input list="champList" value="${esc(names[s.championId] || "")}" placeholder="Champion" onfocus="this.select()" onchange="pickSlotChamp(${i},this.value)">
+          <button class="ghost" style="margin:0;padding:12px 8px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="openChampPicker(${i})">${esc(names[s.championId] || "Champion")} ▾</button>
         </div>
         <select style="margin-top:6px" onchange="updateSlot(${i},{skinId:+this.value})">${skins}</select>
         <div class="spellSlots" style="margin-top:6px">

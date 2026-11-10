@@ -68,6 +68,13 @@ namespace LeagueHelper
             return "ok";
         }
 
+        public string GetPlayer(string puuid)
+        {
+            if (Client == null || !SafeName.IsMatch(puuid))
+                return "{}";
+            return Client.Get("/lol-summoner/v2/summoners/puuid/" + puuid);
+        }
+
         private const string SlotsUrl = "/lol-lobby/v1/lobby/members/localMember/player-slots";
 
         public string GetPlayerSlots() => Client == null ? "[]" : Client.Get(SlotsUrl);
