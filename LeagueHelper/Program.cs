@@ -96,6 +96,12 @@ app.MapPost("/runes", async (HttpRequest request) =>
     int replace = int.TryParse(request.Query["replace"], out int r) ? r : 0;
     return bot.SaveRunes(json, replace);
 });
+app.MapGet("/runes/info", () => Results.Content(bot.GetRuneInfo(), "application/json"));
+app.MapPost("/runes/new", async (HttpRequest request) =>
+    bot.CreateRunePage(await new StreamReader(request.Body).ReadToEndAsync()));
+app.MapPost("/runes/edit/{id:int}", async (int id, HttpRequest request) =>
+    bot.EditRunePage(id, await new StreamReader(request.Body).ReadToEndAsync()));
+app.MapPost("/runes/delete/{id:int}", (int id) => bot.DeleteRunePage(id));
 app.MapPost("/settings", (Bot s) =>
 {
     bot.AutoAccept = s.AutoAccept;

@@ -1,4 +1,4 @@
-namespace LeagueHelper
+﻿namespace LeagueHelper
 {
     internal class Page
     {
@@ -505,6 +505,10 @@ let curPos = "NONE";
 let myPages = [];
 let editPageId = 0;
 let editPageName = "";
+let editSlot = -1;
+let runeInfo = { owned: 0, used: 0 };
+let slotRecs = [];
+let slotPages = [];
 let ed = { primary: 0, sub: 0, prim: [0, 0, 0, 0], sec: {}, secOrder: [], shards: [0, 0, 0] };
 
 const getJson = async url => (await fetch(url)).json();
@@ -1016,6 +1020,8 @@ async function renderMyPages() {
   const data = await getJson("/runepages");
   const all = Array.isArray(data) ? data : [];
   myPages = all.filter(p => p.isDeletable);
+  const info = await getJson("/runes/info").catch(() => null);
+  if (info) runeInfo = info;
 
   const select = document.getElementById("runePage");
   const prev = select.value;
@@ -1040,11 +1046,15 @@ async function renderMyPages() {
         ${ids.slice(1, 6).map(id => `<img class="perk" src="${perkImg(id)}">`).join("")}<br>
         <button class="mini green" onclick="usePage(${i})">Use</button>
         <button class="mini" onclick="editPage(${i})">Edit</button>
+        <button class="mini red" onclick="deletePage(${i})">Delete</button>
       </div>
     </div>`;
   }).join("") : `<p class="muted">You don't have any saved rune pages yet.</p>`;
 
-  html += `<button class="ghost" onclick="newPage()">+ Create new page</button>`;
+  const full = runeInfo.owned > 0 && myPages.length >= runeInfo.owned;
+  const count = runeInfo.owned ? `<div class="center muted" style="margin-top:4px">${myPages.length} / ${runeInfo.owned} pages${full ? " · full" : ""}</div>` : "";
+  html = count + html;
+  html += `<button class="ghost" onclick="newPage()">+ Create new page${full ? " (replaces one)" : ""}</button>`;
   document.getElementById("mineView").innerHTML = html;
 }
 
@@ -1079,13 +1089,16 @@ function editPage(i) {
   loadIntoEditor(p.primaryStyleId, p.subStyleId, p.selectedPerkIds || []);
   editPageId = p.id;
   editPageName = p.name;
+  editSlot = -1;
+  ed.name = p.name;
   runeTabSet("ed");
 }
 
 function newPage() {
-  ed = { primary: styles[0] ? styles[0].id : 0, sub: styles[1] ? styles[1].id : 0, prim: [0, 0, 0, 0], sec: {}, secOrder: [], shards: [0, 0, 0] };
+  ed = { primary: styles[0] ? styles[0].id : 0, sub: styles[1] ? styles[1].id : 0, prim: [0, 0, 0, 0], sec: {}, secOrder: [], shards: [0, 0, 0], name: "" };
   editPageId = 0;
   editPageName = "";
+  editSlot = -1;
   runeTabSet("ed");
 }
 
@@ -1131,6 +1144,8 @@ function editRec(i) {
   loadIntoEditor(r.primaryPerkStyleId, r.secondaryPerkStyleId, (r.perks || []).map(p => p.id));
   editPageId = 0;
   editPageName = "";
+  editSlot = -1;
+  ed.name = [names[curChamp || savedChampId], perkName(((r.perks || [])[0] || {}).id)].filter(x => x).join(" - ");
   runeTabSet("ed");
 }
 
@@ -1155,14 +1170,29 @@ function renderEditor() {
   const primName = styleById(ed.primary) ? styleById(ed.primary).name : "";
   const subName = styleById(ed.sub) ? styleById(ed.sub).name : "";
 
-  let html = `<div class="center muted">${editPageId ? "Editing · <b>" + esc(editPageName) + "</b>" : "New page"}</div>`;
+  let html;
+  if (editSlot >= 0 && curSlots[editSlot]) {
+    const s = curSlots[editSlot];
+    html = `<div class="center muted">Runes for your <b>${esc(names[s.championId] || "")}</b> pick</div>`;
+  } else {
+    html = `<div class="center muted">${editPageId ? "Editing · <b>" + esc(editPageName) + "</b>" : "New page"}</div>`;
+    html += `<label class="field"><span>Page name</span><input id="edName" maxlength="25" placeholder="New Page" value="${esc(ed.name || "")}" oninput="ed.name=this.value"></label>`;
+  }
   html += `<div class="label">Primary · ${esc(primName)}</div><div class="row">${styleRow(ed.primary, "setPrimary", 0)}</div>`;
   primRows.forEach((row, r) => html += perkRow(row, ed.prim[r], "pickPrim", r, r === 0));
   html += `<div class="label">Secondary · ${esc(subName)}</div><div class="row">${styleRow(ed.sub, "setSub", ed.primary)}</div>`;
   subRows.forEach((row, r) => html += perkRow(row, ed.sec[r], "pickSec", r, false));
   html += `<div class="label">Shards</div>`;
   shardRows.forEach((row, r) => html += perkRow(row, ed.shards[r], "pickShard", r, false));
-  html += `<button onclick="applyEditor()">${editPageId ? "Save page" : "Apply runes"}</button>`;
+  if (editSlot >= 0) {
+    html += `<button class="green" onclick="applyEditor()">Use for this pick</button>`;
+  } else if (editPageId) {
+    html += `<button class="green" onclick="applyEditor()">Save page</button>`;
+    html += `<button class="ghost" onclick="applyEditor(true)">Save as new page</button>`;
+  } else {
+    html += `<button class="green" onclick="applyEditor()">Create page</button>`;
+  }
+  html += `<button class="ghost" onclick="cancelEdit()">Cancel</button>`;
 
   document.getElementById("edView").innerHTML = html;
 }
@@ -1206,14 +1236,153 @@ function pickShard(r, id) {
   renderEditor();
 }
 
-async function applyEditor() {
+function editorIds() {
   const secIds = Object.keys(ed.sec).sort().map(k => ed.sec[k]);
   const ids = [...ed.prim, ...secIds, ...ed.shards];
-  if (ids.length !== 9 || ids.includes(0)) {
+  return ids.length === 9 && !ids.includes(0) && !ids.includes(undefined) ? ids : null;
+}
+
+async function applyEditor(asNew) {
+  const ids = editorIds();
+  if (!ids) {
     alert("Pick all runes first");
     return;
   }
-  await applyRunes(ed.primary, ed.sub, ids, editPageId, editPageName);
+
+  if (editSlot >= 0) {
+    const i = editSlot;
+    editSlot = -1;
+    tab("play");
+    await updateSlot(i, { perks: JSON.stringify({ perkIds: ids, perkStyle: ed.primary, perkSubStyle: ed.sub }) });
+    return;
+  }
+
+  const body = JSON.stringify({ name: (ed.name || "").trim() || "New Page", primaryStyleId: ed.primary, subStyleId: ed.sub, selectedPerkIds: ids });
+  const url = editPageId && !asNew ? "/runes/edit/" + editPageId : "/runes/new";
+  const result = await (await fetch(url, { method: "POST", body })).text();
+
+  if (result === "full") {
+    showReplaceSheet(body);
+    return;
+  }
+  await afterRuneSave(result);
+}
+
+async function afterRuneSave(result) {
+  if (!result.startsWith("ok")) {
+    alert(result);
+    return;
+  }
+  editPageId = +result.split(":")[1] || 0;
+  editPageName = ed.name || "New Page";
+  document.getElementById("runePage").value = 0;
+  await save();
+  runeTabSet("mine");
+  flash("Rune page saved ✓");
+}
+
+let pendingRuneBody = "";
+function showReplaceSheet(body) {
+  pendingRuneBody = body;
+  const list = myPages.map(p => `<div class="rec" style="cursor:pointer" onclick="replacePage(${p.id})">
+    <img class="keystone" src="${perkImg((p.selectedPerkIds || [])[0])}">
+    <div><b>${esc(p.name)}</b><br>${(p.selectedPerkIds || []).slice(1, 6).map(id => `<img class="perk" src="${perkImg(id)}">`).join("")}</div>
+  </div>`).join("");
+  document.getElementById("sheetBody").innerHTML = `<div class="center"><div class="big">Your rune pages are full</div><div class="muted">Tap a page to replace it with the new one.</div></div>${list}<button class="ghost" onclick="closeSheet()">Cancel</button>`;
+  document.getElementById("sheet").classList.add("on");
+}
+
+async function replacePage(id) {
+  closeSheet();
+  const result = await (await fetch("/runes/edit/" + id, { method: "POST", body: pendingRuneBody })).text();
+  await afterRuneSave(result);
+}
+
+async function deletePage(i) {
+  const p = myPages[i];
+  if (!p || !confirm(`Delete the rune page "${p.name}"?`)) return;
+  const result = await (await fetch("/runes/delete/" + p.id, { method: "POST" })).text();
+  if (result !== "ok") alert(result);
+  else flash("Page deleted");
+  if (editPageId === p.id) editPageId = 0;
+  await renderMyPages();
+}
+
+function cancelEdit() {
+  const back = editSlot >= 0;
+  editSlot = -1;
+  editPageId = 0;
+  if (back) tab("play");
+  else runeTabSet("mine");
+}
+
+// ---- Runes for Swiftplay picks ----
+function slotPerks(s) {
+  try { return JSON.parse(s.perks || "{}"); } catch (e) { return {}; }
+}
+
+async function openSlotRunes(i) {
+  const s = curSlots[i];
+  if (!s) return;
+  if (!styles.length) await loadRuneData();
+  const champName = names[s.championId] || "this champion";
+  document.getElementById("sheetBody").innerHTML = `<div class="center muted">Loading runes…</div>`;
+  document.getElementById("sheet").classList.add("on");
+
+  const [rec, pages] = await Promise.all([
+    getJson("/recommended/" + s.championId + "/" + s.positionPreference).catch(() => []),
+    getJson("/runepages").catch(() => [])
+  ]);
+  slotRecs = Array.isArray(rec) ? rec : [];
+  slotPages = (Array.isArray(pages) ? pages : []).filter(p => (p.selectedPerkIds || []).length === 9);
+  const cur = (slotPerks(s).perkIds || []).join(",");
+
+  const row = (ids, title, sub, fn, on) => `<div class="rec${on ? " current" : ""}" style="cursor:pointer" onclick="${fn}">
+    <img class="keystone" src="${perkImg(ids[0])}">
+    <div><b>${esc(title)}</b>${on ? ` <small class="muted">· selected</small>` : ""}<br>${ids.slice(1, 6).map(id => `<img class="perk" src="${perkImg(id)}">`).join("")}${sub ? `<br><small class="muted">${esc(sub)}</small>` : ""}</div>
+  </div>`;
+
+  let html = `<div class="center"><div class="big">Runes · ${esc(champName)}</div></div>`;
+  html += `<button onclick="customizeSlotRunes(${i})">✏️ Customize these runes</button>`;
+  if (slotRecs.length) {
+    html += `<div class="label">Recommended</div>`;
+    html += slotRecs.map((r, k) => {
+      const ids = (r.perks || []).map(p => p.id);
+      return row(ids, r.recommendationDescriptor || perkName(ids[0]), "", `useSlotRec(${i},${k})`, ids.join(",") === cur);
+    }).join("");
+  }
+  if (slotPages.length) {
+    html += `<div class="label">My pages</div>`;
+    html += slotPages.map((p, k) => row(p.selectedPerkIds, p.name, "", `useSlotPage(${i},${k})`, p.selectedPerkIds.join(",") === cur)).join("");
+  }
+  html += `<button class="ghost" onclick="closeSheet()">Close</button>`;
+  document.getElementById("sheetBody").innerHTML = html;
+}
+
+async function useSlotRec(i, k) {
+  const r = slotRecs[k];
+  closeSheet();
+  await updateSlot(i, { perks: JSON.stringify({ perkIds: (r.perks || []).map(p => p.id), perkStyle: r.primaryPerkStyleId, perkSubStyle: r.secondaryPerkStyleId }) });
+}
+
+async function useSlotPage(i, k) {
+  const p = slotPages[k];
+  closeSheet();
+  await updateSlot(i, { perks: JSON.stringify({ perkIds: p.selectedPerkIds, perkStyle: p.primaryStyleId, perkSubStyle: p.subStyleId }) });
+}
+
+function customizeSlotRunes(i) {
+  closeSheet();
+  const pk = slotPerks(curSlots[i]);
+  if (pk.perkIds && pk.perkIds.length === 9 && pk.perkStyle) {
+    loadIntoEditor(pk.perkStyle, pk.perkSubStyle, pk.perkIds);
+  } else {
+    ed = { primary: styles[0] ? styles[0].id : 0, sub: styles[1] ? styles[1].id : 0, prim: [0, 0, 0, 0], sec: {}, secOrder: [], shards: [0, 0, 0], name: "" };
+  }
+  editSlot = i;
+  editPageId = 0;
+  tab("runes");
+  runeTabSet("ed");
 }
 
 async function applyRunes(primary, sub, ids, replaceId, keepName) {
@@ -1562,7 +1731,7 @@ async function renderSlots(slots) {
           <select onchange="setSlotSpell(${i},1,+this.value)">${spells(1)}</select>
           <select onchange="setSlotSpell(${i},2,+this.value)">${spells(2)}</select>
         </div>
-        <div class="muted" style="margin-top:6px;font-size:13px;display:flex;align-items:center;gap:6px">${keystone ? `<img class="perk" src="${perkImg(keystone)}">` : ""}Runes: ${esc(perkName(keystone) || "default")}</div>
+        <button class="ghost" style="margin:6px 0 0;padding:8px 10px;font-size:15px;display:flex;align-items:center;justify-content:center;gap:6px" onclick="openSlotRunes(${i})">${keystone ? `<img class="perk" src="${perkImg(keystone)}">` : "✦"} Runes: ${esc(perkName(keystone) || "default")} ▾</button>
       </div>
     </div>`;
   }).join("");

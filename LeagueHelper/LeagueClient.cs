@@ -47,6 +47,11 @@ namespace LeagueHelper
             Http.PutAsync(url, Body(json)).Wait();
         }
 
+        public string PutText(string url, string json)
+        {
+            return Http.PutAsync(url, Body(json)).Result.Content.ReadAsStringAsync().Result;
+        }
+
         public string Patch(string url, string json)
         {
             return Http.PatchAsync(url, Body(json)).Result.Content.ReadAsStringAsync().Result;
