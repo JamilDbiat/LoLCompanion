@@ -153,6 +153,7 @@ app.MapPost("/loot/craft/{recipe}", async (string recipe, HttpRequest request) =
     return Results.Content(bot.Craft(recipe, ids, repeat), "application/json");
 });
 app.MapGet("/yourshop", () => Results.Content(bot.GetYourShop(), "application/json"));
+app.MapGet("/yourshop/status", () => Results.Content(bot.GetYourShopStatus(), "application/json"));
 app.MapPost("/yourshop/{id}/reveal", (string id) => bot.RevealOffer(id));
 app.MapPost("/yourshop/{id}/buy", (string id) => bot.BuyOffer(id));
 app.MapGet("/store/skins/{champ:int}", (int champ) => Results.Content(bot.GetChampionStore(champ), "application/json"));

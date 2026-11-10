@@ -40,6 +40,13 @@ namespace LeagueHelper
             return JsonSerializer.Serialize(list);
         }
 
+        public string GetYourShopStatus()
+        {
+            if (Client == null)
+                return "{}";
+            return Client.Get("/lol-yourshop/v1/status");
+        }
+
         public string RevealOffer(string offerId)
         {
             if (Client == null)

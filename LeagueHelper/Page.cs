@@ -463,6 +463,7 @@ nav button b{font-size:20px}
 
 <script>
 const ART = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/";
+const LOOT_ART = "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-loot/global/default/";
 const ASSET = p => !p ? "" : p.startsWith("/lol-game-data/assets/") ? ART + p.slice(22).toLowerCase() : "/asset?path=" + encodeURIComponent(p);
 const ICON = id => ART + "v1/champion-icons/" + id + ".png";
 const PIMG = p => ASSET(p);
@@ -2446,15 +2447,17 @@ function lootSymbol(l) {
 }
 
 function lootImg(l) {
-  if (l.type === "CHEST" || l.type === "MATERIAL" || l.type === "CURRENCY") return "";
   const path = l.tilePath || l.splashPath || "";
+  if (path.startsWith("/fe/lol-loot/")) return LOOT_ART + path.slice(13).toLowerCase();
+  if (l.type === "CHEST" || l.type === "MATERIAL" || l.type === "CURRENCY") return "";
   return path.startsWith("/lol-game-data/assets/") ? ASSET(path) : "";
 }
 
 function lootTile(l, cls) {
   const img = lootImg(l);
   const fallback = `<div class="lootIcon ${cls || ""}">${lootSymbol(l)}</div>`;
-  return img ? `<img loading="lazy" src="${img}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'lootIcon',textContent:'✦'}))">` : fallback;
+  const sym = lootSymbol(l);
+  return img ? `<img loading="lazy" src="${img}"${img.startsWith(LOOT_ART) ? ` style="object-fit:contain;padding:12px;background:#170d2a"` : ""} onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'lootIcon',textContent:'${sym}'}))">` : fallback;
 }
 
 function renderLoot() {
@@ -2627,11 +2630,37 @@ function renderSkinStore() {
   document.getElementById("storeMore").style.display = list.length > storeShown ? "block" : "none";
 }
 
+let ysTimer = 0;
+let ysEndAt = 0;
+let ysStartAt = 0;
+
+function fmtLeft(ms) {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60;
+  if (d) return `${d}d ${h}h ${m}m`;
+  if (h) return `${h}h ${m}m ${sec}s`;
+  return `${m}m ${sec}s`;
+}
+
+function tickYourShop() {
+  const el = document.getElementById("ysEnd");
+  const now = Date.now();
+  if (ysEndAt && ysEndAt > now) el.textContent = "· ⏳ ends in " + fmtLeft(ysEndAt - now);
+  else if (ysStartAt && ysStartAt > now) el.textContent = "· opens in " + fmtLeft(ysStartAt - now);
+  else if (ysEndAt) el.textContent = "· ended";
+  else el.textContent = "";
+}
+
 async function loadYourShop() {
-  const data = await getJson("/yourshop");
+  const [data, status] = await Promise.all([getJson("/yourshop"), getJson("/yourshop/status").catch(() => ({}))]);
   ysOffers = Array.isArray(data) ? data : [];
-  const end = ysOffers[0] && ysOffers[0].expirationDate;
-  document.getElementById("ysEnd").textContent = end ? "· ends " + new Date(end).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  const offerEnd = ysOffers.map(o => Date.parse(o.expirationDate)).filter(x => x > 0).sort()[0] || 0;
+  const real = t => { const v = Date.parse(t || ""); return v && v < Date.parse("2029-01-01") ? v : 0; };
+  ysEndAt = offerEnd || (status && status.hubEnabled ? real(status.endTime) : 0);
+  ysStartAt = status && !status.hubEnabled ? real(status.startTime) : 0;
+  clearInterval(ysTimer);
+  tickYourShop();
+  if (ysEndAt || ysStartAt) ysTimer = setInterval(tickYourShop, 1000);
 
   document.getElementById("ysGrid").innerHTML = ysOffers.length ? ysOffers.map((o, i) => {
     if (!o.revealed) return `<div class="colItem" onclick="revealOffer(${i})"><div class="lootIcon">?</div><div class="colName">Tap to reveal</div></div>`;
