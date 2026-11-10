@@ -189,6 +189,13 @@ button:active { transform: scale(.97); }
 @keyframes pop{0%{transform:scale(.2) rotate(-12deg);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 .banner{height:150px;border-radius:12px;background-size:cover;background-position:center;position:relative;margin-bottom:10px;overflow:hidden}
 .bannerText{position:absolute;left:0;right:0;bottom:0;padding:10px;background:linear-gradient(transparent,rgba(0,0,0,.8))}
+#viewer{position:fixed;inset:0;z-index:45;background:#0b0614;display:none;flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom))}
+#viewer.on{display:flex}
+#viewer .tabs{margin:12px 0}
+#viewStage{flex:1;overflow:auto;border-radius:14px;background:#120a1f;border:1px solid #3a2560;display:flex;align-items:center;-webkit-overflow-scrolling:touch}
+#viewStage img.splash{height:100%;width:auto;max-width:none;display:block;animation:fade .3s}
+#viewStage img.load{max-height:100%;max-width:100%;margin:auto;display:block;animation:fade .3s}
+#viewStage .threeD{margin:auto;text-align:center;padding:24px;max-width:360px}
 nav button{font-size:11px}
 nav button b{font-size:20px}
 </style>
@@ -420,6 +427,20 @@ nav button b{font-size:20px}
 </div>
 
 <div id="sheet" onclick="if(event.target===this)closeSheet()"><div id="sheetBody"></div></div>
+
+<div id="viewer">
+<div class="dmHead">
+<button class="ghost" onclick="closeViewer()">← Back</button>
+<div><b id="viewName"></b><br><small class="muted" id="viewInfo"></small></div>
+</div>
+<div class="tabs">
+<button id="viewSplash" onclick="viewMode('splash')">Splash art</button>
+<button id="viewLoad" onclick="viewMode('load')">Loading screen</button>
+<button id="view3d" onclick="viewMode('3d')">3D model</button>
+</div>
+<div id="viewStage"></div>
+<div class="muted center" id="viewHint" style="margin-top:8px;font-size:13px"></div>
+</div>
 
 <div id="reveal">
 <div id="revealTitle" class="big"></div>
@@ -1579,6 +1600,51 @@ async function loadProfile() {
   await loadCollection(colCat);
 }
 
+let viewItem = null;
+let colShown = [];
+
+function openViewer(source, i) {
+  const list = source === "col" ? colShown : source === "store" ? storeSkins : ysOffers;
+  const s = list[i];
+  if (!s) return;
+  viewItem = { name: s.name || s.skinName || "", rarity: s.rarity, splash: s.splash || s.image, load: s.load, champ: s.champ || s.championId, price: s.price || s.discountPrice };
+  const r = RARITY[viewItem.rarity];
+  const parts = [names[viewItem.champ] || "", r ? r[0] : "", viewItem.price ? viewItem.price + " RP" : ""].filter(x => x);
+  document.getElementById("viewName").textContent = viewItem.name;
+  document.getElementById("viewInfo").textContent = parts.join(" · ");
+  document.getElementById("viewLoad").style.display = viewItem.load ? "" : "none";
+  document.getElementById("viewer").classList.add("on");
+  viewMode("splash");
+}
+
+function closeViewer() {
+  document.getElementById("viewer").classList.remove("on");
+  document.getElementById("viewStage").innerHTML = "";
+}
+
+function viewMode(mode) {
+  ["viewSplash", "viewLoad", "view3d"].forEach(id => document.getElementById(id).className = "");
+  const stage = document.getElementById("viewStage");
+  const hint = document.getElementById("viewHint");
+
+  if (mode === "splash") {
+    document.getElementById("viewSplash").className = "on";
+    stage.innerHTML = `<img class="splash" src="${ASSET(viewItem.splash)}">`;
+    stage.scrollLeft = 0;
+    const img = stage.querySelector("img");
+    img.onload = () => stage.scrollLeft = (stage.scrollWidth - stage.clientWidth) / 2;
+    hint.textContent = "Drag left and right to look around · pinch to zoom";
+  } else if (mode === "load") {
+    document.getElementById("viewLoad").className = "on";
+    stage.innerHTML = `<img class="load" src="${ASSET(viewItem.load)}">`;
+    hint.textContent = "Loading screen art";
+  } else {
+    document.getElementById("view3d").className = "on";
+    stage.innerHTML = `<div class="threeD"><div class="lootIcon" style="width:110px;margin:0 auto 14px">🧊</div><div class="big">See it in 3D</div><p class="muted">League doesn't share 3D models with other apps, so this opens <b>Khada</b>, a free 3D viewer for League. You can rotate, zoom and play the animations there.</p><p>Search for <b>${esc(viewItem.name)}</b></p><a href="https://modelviewer.lol" target="_blank" rel="noopener"><button class="green">Open 3D viewer</button></a></div>`;
+    hint.textContent = "Opens in your browser";
+  }
+}
+
 async function pickIcon() {
   await loadCollection("icons");
   document.getElementById("colTabs").scrollIntoView({ behavior: "smooth" });
@@ -1658,10 +1724,11 @@ function renderCollection() {
     if (cat === "spells") info = list.length + " spells";
     if (cat === "icons") info = fmt(all.length) + " owned · tap one to use it";
     if (cat === "items") info = list.length + " items";
-    html = list.map(x => {
+    colShown = list;
+    html = list.map((x, i) => {
       let img = ASSET(x.image);
       let label = x.name;
-      let click = "";
+      let click = cat === "skins" || cat === "chromas" ? `onclick="openViewer('col',${i})"` : "";
       if (cat === "icons") { img = profileIcon(x); label = "#" + x; click = `onclick="setIcon(${x})"`; }
       if (cat === "wards") img = ASSET(x.wardImagePath);
       if (cat === "spells") img = PIMG(x.iconPath);
@@ -1873,8 +1940,8 @@ function renderSkinStore() {
   document.getElementById("storeGrid").innerHTML = storeSkins.length ? storeSkins.map((s, i) => {
     const r = RARITY[s.rarity];
     const badge = r ? `<span class="gem" style="background:${r[1]}">${r[0]}</span>` : "";
-    const buy = s.needChamp ? `<small class="muted">Unlock ${esc(names[s.champ] || "champion")} first</small>` : `<button class="mini green" onclick="buySkin(${i})">Buy</button>`;
-    return `<div class="colItem"><img loading="lazy" src="${ASSET(s.image)}">${badge}<div class="colName">${esc(s.name)}</div><b>${s.price} RP</b>${buy}</div>`;
+    const buy = s.needChamp ? `<small class="muted">Unlock ${esc(names[s.champ] || "champion")} first</small>` : `<button class="mini green" onclick="event.stopPropagation();buySkin(${i})">Buy</button>`;
+    return `<div class="colItem" onclick="openViewer('store',${i})"><img loading="lazy" src="${ASSET(s.image)}">${badge}<div class="colName">${esc(s.name)}</div><b>${s.price} RP</b>${buy}</div>`;
   }).join("") : `<p class="muted center">No skins found.</p>`;
   document.getElementById("storeMore").style.display = list.length > storeShown ? "block" : "none";
 }
@@ -1888,8 +1955,8 @@ async function loadYourShop() {
   document.getElementById("ysGrid").innerHTML = ysOffers.length ? ysOffers.map((o, i) => {
     if (!o.revealed) return `<div class="colItem" onclick="revealOffer(${i})"><div class="lootIcon">?</div><div class="colName">Tap to reveal</div></div>`;
     const pct = o.originalPrice ? Math.round(100 - o.discountPrice * 100 / o.originalPrice) : 0;
-    const buy = o.owned ? `<div class="muted">Owned</div>` : `<small class="muted"><s>${o.originalPrice}</s></small> <b>${o.discountPrice} RP</b><button class="mini green" onclick="buyOffer(${i})">Buy</button>`;
-    return `<div class="colItem"><img loading="lazy" src="${ASSET(o.image)}"><span class="gem" style="background:var(--gold);color:#111;text-shadow:none">-${pct}%</span><div class="colName">${esc(o.skinName || names[o.championId] || "")}</div>${buy}</div>`;
+    const buy = o.owned ? `<div class="muted">Owned</div>` : `<small class="muted"><s>${o.originalPrice}</s></small> <b>${o.discountPrice} RP</b><button class="mini green" onclick="event.stopPropagation();buyOffer(${i})">Buy</button>`;
+    return `<div class="colItem" onclick="openViewer('ys',${i})"><img loading="lazy" src="${ASSET(o.image)}"><span class="gem" style="background:var(--gold);color:#111;text-shadow:none">-${pct}%</span><div class="colName">${esc(o.skinName || names[o.championId] || "")}</div>${buy}</div>`;
   }).join("") : `<p class="muted center">The Night Market isn't open right now.</p>`;
 }
 

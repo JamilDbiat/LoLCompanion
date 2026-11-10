@@ -30,7 +30,10 @@ namespace LeagueHelper
                     owned = offer.TryGetProperty("owned", out JsonElement ow) && ow.ValueKind == JsonValueKind.True,
                     revealed = offer.TryGetProperty("revealed", out JsonElement rv) && rv.ValueKind == JsonValueKind.True,
                     expirationDate = Text(offer, "expirationDate"),
-                    image = SkinTiles.GetValueOrDefault(skinId, "")
+                    image = SkinTiles.GetValueOrDefault(skinId, ""),
+                    splash = SkinSplashes.GetValueOrDefault(skinId, ""),
+                    load = SkinLoadScreens.GetValueOrDefault(skinId, ""),
+                    rarity = SkinRarities.GetValueOrDefault(skinId, "")
                 });
             }
 
@@ -152,6 +155,8 @@ namespace LeagueHelper
                     name = SkinNames[id],
                     rarity = SkinRarities.GetValueOrDefault(id, ""),
                     image = SkinTiles.GetValueOrDefault(id, ""),
+                    splash = SkinSplashes.GetValueOrDefault(id, ""),
+                    load = SkinLoadScreens.GetValueOrDefault(id, ""),
                     price,
                     needChamp = !champions.Contains(champ)
                 });

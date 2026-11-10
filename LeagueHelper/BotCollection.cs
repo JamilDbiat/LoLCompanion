@@ -8,6 +8,8 @@ namespace LeagueHelper
         private Dictionary<int, string> SkinNames { get; set; } = new Dictionary<int, string>();
         private Dictionary<int, string> SkinTiles { get; set; } = new Dictionary<int, string>();
         private HashSet<int> BaseSkins { get; set; } = new HashSet<int>();
+        private Dictionary<int, string> SkinSplashes { get; set; } = new Dictionary<int, string>();
+        private Dictionary<int, string> SkinLoadScreens { get; set; } = new Dictionary<int, string>();
         private Dictionary<int, (string Name, string Image, int Champ)> Chromas { get; set; } = new Dictionary<int, (string Name, string Image, int Champ)>();
 
         public string GetSummoner() => Client == null ? "{}" : Client.Get("/lol-summoner/v1/current-summoner");
@@ -72,6 +74,8 @@ namespace LeagueHelper
                         champ = id / 1000,
                         name = SkinNames[id],
                         image = SkinTiles.GetValueOrDefault(id, ""),
+                        splash = SkinSplashes.GetValueOrDefault(id, ""),
+                        load = SkinLoadScreens.GetValueOrDefault(id, ""),
                         rarity = SkinRarities.GetValueOrDefault(id, ""),
                         chroma = false
                     });
@@ -84,6 +88,8 @@ namespace LeagueHelper
                         champ = chroma.Champ,
                         name = chroma.Name,
                         image = chroma.Image,
+                        splash = chroma.Image,
+                        load = "",
                         rarity = "",
                         chroma = true
                     });
@@ -202,6 +208,9 @@ namespace LeagueHelper
                 SkinRarities[id] = Text(entry.Value, "rarity");
                 SkinNames[id] = Text(entry.Value, "name");
                 SkinTiles[id] = Text(entry.Value, "tilePath");
+                string uncentered = Text(entry.Value, "uncenteredSplashPath");
+                SkinSplashes[id] = uncentered != "" ? uncentered : Text(entry.Value, "splashPath");
+                SkinLoadScreens[id] = Text(entry.Value, "loadScreenPath");
 
                 if (entry.Value.TryGetProperty("isBase", out JsonElement isBase) && isBase.ValueKind == JsonValueKind.True)
                     BaseSkins.Add(id);
