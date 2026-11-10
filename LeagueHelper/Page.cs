@@ -646,7 +646,7 @@ async function load() {
   champList.innerHTML = "";
   champs = {};
   list
-    .filter(c => c.id > 0 && (c.freeToPlay || (c.ownership && c.ownership.owned)))
+    .filter(c => c.id > 0 && c.id < 60000 && (c.freeToPlay || (c.ownership && c.ownership.owned)))
     .sort((x, y) => x.name.localeCompare(y.name))
     .forEach(c => {
       champs[c.name] = c.id;
@@ -1488,17 +1488,18 @@ function memberName(m) {
   return "...";
 }
 
-let pickChamps = {};
+let pickChamps = [];
+let pickClassic = false;
 
 async function openChampPicker(i) {
   const list = await getJson("/champions");
-  pickChamps = {};
-  if (Array.isArray(list))
-    list.filter(c => c.id > 0 && (c.freeToPlay || (c.ownership && c.ownership.owned)))
-      .forEach(c => pickChamps[c.name] = c.id);
-  const classic = Object.values(pickChamps).some(id => id >= 60000);
+  pickChamps = Array.isArray(list)
+    ? list.filter(c => c.id > 0 && (c.freeToPlay || (c.ownership && c.ownership.owned))).map(c => ({ id: c.id, name: c.name, classic: c.id >= 60000 }))
+    : [];
+  pickClassic = curSlots[i] ? curSlots[i].championId >= 60000 : false;
+  const hasClassic = pickChamps.some(c => c.classic);
   document.getElementById("sheetBody").innerHTML = `<div class="big center">Pick a champion</div>
-    ${classic ? `<div class="muted center" style="font-size:13px;margin-bottom:6px">Your client is in League Classic mode, so these are the classic champions. Switch to the LEAGUE tab in the client for the modern ones.</div>` : ""}
+    ${hasClassic ? `<div class="tabs"><button id="pickLeague" onclick="setPickMode(${i},false)">League</button><button id="pickClassicBtn" onclick="setPickMode(${i},true)">Classic</button></div>` : ""}
     <input id="pickSearch" placeholder="Search..." oninput="renderChampPicker(${i})" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <div id="pickGrid" class="colGrid" style="margin-top:10px;grid-template-columns:repeat(auto-fill,minmax(72px,1fr))"></div>
     <button class="ghost" onclick="closeSheet()">Cancel</button>`;
@@ -1506,12 +1507,23 @@ async function openChampPicker(i) {
   renderChampPicker(i);
 }
 
+function setPickMode(i, classic) {
+  pickClassic = classic;
+  renderChampPicker(i);
+}
+
 function renderChampPicker(i) {
   const q = document.getElementById("pickSearch").value.toLowerCase().trim();
   const taken = curSlots[i] ? curSlots[i].championId : 0;
-  document.getElementById("pickGrid").innerHTML = Object.entries(pickChamps)
-    .filter(([name]) => name.toLowerCase().includes(q))
-    .sort((a, b) => a[0].localeCompare(b[0]))
+  const league = document.getElementById("pickLeague");
+  if (league) {
+    league.className = pickClassic ? "" : "on";
+    document.getElementById("pickClassicBtn").className = pickClassic ? "on" : "";
+  }
+  document.getElementById("pickGrid").innerHTML = pickChamps
+    .filter(c => c.classic === pickClassic && c.name.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(c => [c.name, c.id])
     .map(([name, id]) => `<div class="colItem" onclick="closeSheet();updateSlot(${i},{championId:${id},skinId:${id * 1000}})"><img loading="lazy" src="${ICON(id)}" class="${id === taken ? "selected" : ""}"><div class="colName">${esc(name)}</div></div>`)
     .join("") || `<p class="muted center">No champions found.</p>`;
 }
