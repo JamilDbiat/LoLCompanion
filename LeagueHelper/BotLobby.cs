@@ -68,6 +68,30 @@ namespace LeagueHelper
             return "ok";
         }
 
+        private const string SlotsUrl = "/lol-lobby/v1/lobby/members/localMember/player-slots";
+
+        public string GetPlayerSlots() => Client == null ? "[]" : Client.Get(SlotsUrl);
+
+        public string SetPlayerSlots(string json)
+        {
+            if (Client == null)
+                return "League isn't open.";
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            List<PlayerSlot>? slots = JsonSerializer.Deserialize<List<PlayerSlot>>(json, options);
+            if (slots == null || slots.Count == 0 || slots.Count > 2)
+                return "Invalid picks.";
+            if (slots.Any(s => !Roles.Contains(s.PositionPreference) || s.ChampionId <= 0))
+                return "Pick a champion and a role for each slot.";
+
+            Client.Put(SlotsUrl, JsonSerializer.Serialize(slots, options));
+
+            List<PlayerSlot>? saved = JsonSerializer.Deserialize<List<PlayerSlot>>(Client.Get(SlotsUrl), options);
+            if (saved == null || saved.Count != slots.Count || saved.Where((s, i) => s.ChampionId != slots[i].ChampionId).Any())
+                return "League didn't accept that pick. Make sure you own the champion.";
+            return "ok";
+        }
+
         private string LobbyPost(string url, string json)
         {
             if (Client == null)

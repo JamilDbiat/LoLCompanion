@@ -245,6 +245,10 @@ nav button b{font-size:20px}
 <label class="field" style="flex:1"><span>Main role</span><select id="role1" onchange="setRoles()"></select></label>
 <label class="field" style="flex:1"><span>Second role</span><select id="role2" onchange="setRoles()"></select></label>
 </div>
+<div id="slotBox" style="display:none">
+<div class="label" style="text-align:left">Your picks</div>
+<div id="slotList"></div>
+</div>
 <div id="searchInfo" class="center muted" style="margin-top:10px"></div>
 <button id="findBtn" class="green" onclick="findMatch()">Find match</button>
 <button class="ghost" onclick="leaveLobby()">Leave lobby</button>
@@ -1401,6 +1405,10 @@ async function renderLobby(phase) {
     }
   }
 
+  const quick = !!l.gameConfig.showQuickPlaySlotSelection;
+  show("slotBox", quick);
+  if (quick) await renderSlots(me.playerSlots || []);
+
   searching = phase === "Matchmaking";
   const info = document.getElementById("searchInfo");
   if (searching) {
@@ -1417,6 +1425,107 @@ async function renderLobby(phase) {
   btn.className = searching ? "red" : "green";
   btn.style.display = me.isLeader ? "block" : "none";
   renderFriends();
+}
+
+let curSlots = [];
+let slotKey = "";
+let ownedSkinList = null;
+
+async function renderSlots(slots) {
+  const key = JSON.stringify(slots);
+  if (key === slotKey) return;
+  const active = document.activeElement;
+  if (active && document.getElementById("slotBox").contains(active) && active.tagName !== "BUTTON") return;
+  slotKey = key;
+  curSlots = slots;
+
+  if (!ownedSkinList) {
+    const data = await getJson("/collection/skins");
+    ownedSkinList = Array.isArray(data) ? data.filter(s => !s.chroma) : [];
+  }
+  if (!spellData.length) await loadSpells();
+  if (!styles.length) await loadRuneData();
+
+  const roleList = ROLES.filter(r => r[0] !== "UNSELECTED" && r[0] !== "FILL");
+  const spellList = availableSpells();
+
+  document.getElementById("slotList").innerHTML = slots.map((s, i) => {
+    const roles = roleList.map(([v, t]) => `<option value="${v}" ${v === s.positionPreference ? "selected" : ""}>${t}</option>`).join("");
+    const skins = [`<option value="${s.championId * 1000}">Default skin</option>`]
+      .concat(ownedSkinList.filter(k => k.champ === s.championId).map(k => `<option value="${k.id}" ${k.id === s.skinId ? "selected" : ""}>${esc(k.name)}</option>`))
+      .join("");
+    const spells = n => spellList.map(sp => `<option value="${sp.id}" ${sp.id === s["spell" + n] ? "selected" : ""}>${esc(sp.name)}</option>`).join("");
+    let keystone = 0;
+    try { keystone = JSON.parse(s.perks || "{}").perkIds[0]; } catch (e) { }
+    return `<div class="rec" style="align-items:flex-start">
+      <img class="keystone" style="border-radius:12px" src="${ICON(s.championId)}">
+      <div style="flex:1;min-width:0">
+        <div class="spellSlots">
+          <select onchange="updateSlot(${i},{positionPreference:this.value})">${roles}</select>
+          <input list="champList" value="${esc(names[s.championId] || "")}" placeholder="Champion" onfocus="this.select()" onchange="pickSlotChamp(${i},this.value)">
+        </div>
+        <select style="margin-top:6px" onchange="updateSlot(${i},{skinId:+this.value})">${skins}</select>
+        <div class="spellSlots" style="margin-top:6px">
+          <select onchange="setSlotSpell(${i},1,+this.value)">${spells(1)}</select>
+          <select onchange="setSlotSpell(${i},2,+this.value)">${spells(2)}</select>
+        </div>
+        <div class="muted" style="margin-top:6px;font-size:13px;display:flex;align-items:center;gap:6px">${keystone ? `<img class="perk" src="${perkImg(keystone)}">` : ""}Runes: ${esc(perkName(keystone) || "default")}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function applyRecommended(s) {
+  const data = await getJson("/recommended/" + s.championId + "/" + s.positionPreference);
+  const r = Array.isArray(data) && data[0];
+  if (!r) return;
+  s.perks = JSON.stringify({ perkIds: (r.perks || []).map(p => p.id), perkStyle: r.primaryPerkStyleId, perkSubStyle: r.secondaryPerkStyleId });
+  if (r.summonerSpellIds && r.summonerSpellIds.length === 2) {
+    s.spell1 = r.summonerSpellIds[0];
+    s.spell2 = r.summonerSpellIds[1];
+  }
+}
+
+async function updateSlot(i, change) {
+  const slots = curSlots.map(s => ({ ...s }));
+  Object.assign(slots[i], change);
+  if (change.positionPreference && slots[1 - i] && slots[1 - i].positionPreference === change.positionPreference)
+    slots[1 - i].positionPreference = curSlots[i].positionPreference;
+  if (change.championId || change.positionPreference) await applyRecommended(slots[i]);
+  if (document.activeElement) document.activeElement.blur();
+
+  const res = await fetch("/lobby/slots", { method: "POST", body: JSON.stringify(slots) });
+  const result = await res.text();
+  slotKey = "";
+  if (result !== "ok") {
+    alert(result);
+  } else {
+    flash("Picks saved ✓");
+  }
+  refresh();
+}
+
+function pickSlotChamp(i, name) {
+  const id = champs[name];
+  if (!id) {
+    alert("Pick a champion you own from the list.");
+    slotKey = "";
+    return;
+  }
+  updateSlot(i, { championId: id, skinId: id * 1000 });
+}
+
+function setSlotSpell(i, n, id) {
+  let a = curSlots[i].spell1;
+  let b = curSlots[i].spell2;
+  if (n === 1) {
+    if (id === b) b = a;
+    a = id;
+  } else {
+    if (id === a) a = b;
+    b = id;
+  }
+  updateSlot(i, { spell1: a, spell2: b });
 }
 
 async function loadFriends() {
