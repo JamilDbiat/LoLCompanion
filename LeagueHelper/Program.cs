@@ -123,6 +123,13 @@ app.MapPost("/lobby/invite/{id:long}", (long id) => bot.Invite(id));
 app.MapPost("/lobby/kick/{id:long}", (long id) => bot.Kick(id));
 app.MapPost("/lobby/roles/{first}/{second}", (string first, string second) => bot.SetRoles(first, second));
 app.MapPost("/invites/{id}/{answer}", (string id, string answer) => bot.AnswerInvite(id, answer == "accept"));
+app.MapGet("/conversations", () => Results.Content(bot.GetConversations(), "application/json"));
+app.MapGet("/dm", (string id) => Results.Content(bot.GetDirectMessages(id), "application/json"));
+app.MapPost("/dm", async (string id, HttpRequest request) =>
+{
+    string text = await new StreamReader(request.Body).ReadToEndAsync();
+    return bot.SendDirectMessage(id, text);
+});
 
 app.Start();
 

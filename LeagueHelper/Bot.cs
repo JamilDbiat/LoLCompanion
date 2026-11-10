@@ -86,6 +86,8 @@ namespace LeagueHelper
                 if (phase == "None" || phase == "Lobby")
                     CheckInvites(client);
 
+                CheckMessages(client);
+
                 if (phase == "ChampSelect")
                 {
                     if (!setupDone)

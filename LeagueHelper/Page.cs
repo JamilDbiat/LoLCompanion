@@ -146,6 +146,15 @@ button:active { transform: scale(.97); }
 }
 .slot, .spellSlot, .rec, .preview, #chatBox, .tabs button:not(.on) { background: #170d2a !important; }
 .icon.empty { background: #0f0820 !important; }
+#dmView{position:fixed;inset:0;z-index:30;background:#120a1f;display:none;flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom))}
+#dmView.on{display:flex}
+.dmHead{display:flex;align-items:center;gap:10px}
+.dmHead button{width:auto;margin:0;padding:8px 14px}
+#dmBox{flex:1;overflow-y:auto;background:#170d2a;border:1px solid #3a2560;border-radius:12px;padding:10px;margin:12px 0;display:flex;flex-direction:column}
+.msg{max-width:80%;padding:8px 12px;border-radius:14px;margin:3px 0;background:#22143a;word-wrap:break-word;align-self:flex-start}
+.msg.mine{align-self:flex-end;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff}
+.badge{background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:6px}
+.friend{cursor:pointer}
 </style>
 </head>
 <body>
@@ -305,6 +314,19 @@ button:active { transform: scale(.97); }
 <button data-tab="settings" onclick="tab('settings')"><b>⚙</b>Settings</button>
 </nav>
 <div id="saved" class="toast"></div>
+
+<div id="dmView">
+<div class="dmHead">
+<button class="ghost" onclick="closeChat()">← Back</button>
+<img id="dmIcon" class="icon">
+<div><b id="dmName"></b><br><small class="muted" id="dmStatus"></small></div>
+</div>
+<div id="dmBox"></div>
+<div class="chatRow">
+<input id="dmInput" placeholder="Message..." onkeydown="if(event.key==='Enter')sendDm()">
+<button onclick="sendDm()">Send</button>
+</div>
+</div>
 
 <script>
 const ASSET = p => p ? "/asset?path=" + encodeURIComponent(p) : "";
@@ -555,6 +577,7 @@ async function refresh() {
   }
   if (lobbyPhase) await renderLobby(b.phase);
   if (connected) await renderInvites();
+  if (dmId) await renderDm();
 
   if (inSelect) {
     await renderSelect();
@@ -1150,6 +1173,9 @@ let inLobby = false;
 let searching = false;
 let roleKey = "";
 let inviteKey = "";
+let unread = {};
+let dmId = "";
+let dmCount = -1;
 
 function roleName(r) {
   const found = ROLES.find(x => x[0] === r);
@@ -1233,7 +1259,62 @@ async function renderLobby(phase) {
 async function loadFriends() {
   const list = await getJson("/friends");
   friends = Array.isArray(list) ? list : [];
+  const convs = await getJson("/conversations");
+  unread = {};
+  if (Array.isArray(convs))
+    convs.filter(c => c.type === "chat").forEach(c => unread[c.id] = c.unreadMessageCount || 0);
   renderFriends();
+}
+
+async function openChat(encodedId) {
+  dmId = decodeURIComponent(encodedId);
+  dmCount = -1;
+  if (!meId) {
+    const m = await getJson("/chatme");
+    meId = m.id || "";
+  }
+  const f = friends.find(x => x.id === dmId) || {};
+  document.getElementById("dmName").textContent = f.gameName || f.name || "Friend";
+  document.getElementById("dmStatus").textContent = friendStatus(f);
+  document.getElementById("dmIcon").src = profileIcon(f.icon);
+  document.getElementById("dmBox").innerHTML = "";
+  document.getElementById("dmView").classList.add("on");
+  await renderDm();
+}
+
+function closeChat() {
+  dmId = "";
+  document.getElementById("dmView").classList.remove("on");
+}
+
+async function renderDm() {
+  if (!dmId) return;
+  const data = await getJson("/dm?id=" + encodeURIComponent(dmId));
+  const msgs = Array.isArray(data) ? data.filter(m => m.type !== "system") : [];
+  if (msgs.length === dmCount) return;
+  dmCount = msgs.length;
+
+  const box = document.getElementById("dmBox");
+  box.innerHTML = msgs.length
+    ? msgs.map(m => `<div class="msg${m.fromId === meId ? " mine" : ""}">${esc(m.body)}</div>`).join("")
+    : `<p class="muted center">No messages yet. Say hi!</p>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendDm() {
+  const input = document.getElementById("dmInput");
+  const text = input.value.trim();
+  if (!text || !dmId) return;
+  input.value = "";
+  const res = await fetch("/dm?id=" + encodeURIComponent(dmId), { method: "POST", body: text });
+  const result = await res.text();
+  if (result !== "ok") {
+    alert(result);
+    input.value = text;
+    return;
+  }
+  dmCount = -1;
+  await renderDm();
 }
 
 function friendStatus(f) {
@@ -1255,8 +1336,9 @@ function renderFriends() {
 
   document.getElementById("friendList").innerHTML = list.length ? list.map(f => {
     const off = f.availability === "offline" || f.availability === "mobile";
-    const button = off ? "" : `<button class="mini" onclick="invite(${f.summonerId})">Invite</button>`;
-    return `<div class="slot${off ? " faded" : ""}"><img class="icon" src="${profileIcon(f.icon)}"><div style="flex:1"><b>${esc(f.gameName || f.name || "Friend")}</b><br><small>${friendStatus(f)}</small></div>${button}</div>`;
+    const button = off ? "" : `<button class="mini" onclick="event.stopPropagation();invite(${f.summonerId})">Invite</button>`;
+    const badge = unread[f.id] ? `<span class="badge">${unread[f.id]}</span>` : "";
+    return `<div class="slot friend${off ? " faded" : ""}" onclick="openChat('${encodeURIComponent(f.id)}')"><img class="icon" src="${profileIcon(f.icon)}"><div style="flex:1"><b>${esc(f.gameName || f.name || "Friend")}</b>${badge}<br><small>${friendStatus(f)}</small></div>${button}</div>`;
   }).join("") : `<p class="muted">No friends found.</p>`;
 }
 
