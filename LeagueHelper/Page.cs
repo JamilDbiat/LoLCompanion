@@ -1167,11 +1167,11 @@ async function loadQueues() {
   queues = {};
   select.innerHTML = "";
   all
-    .filter(q => q.queueAvailability === "Available" && (q.category === "PvP" || q.category === "VersusAi"))
+    .filter(q => q.queueAvailability === "Available" && q.isVisible && q.name && (q.category === "PvP" || q.category === "VersusAi"))
     .sort((x, y) => x.id - y.id)
     .forEach(q => {
-      const name = q.name || q.description || q.shortName;
-      if (!name || queues[q.id]) return;
+      const name = q.category === "VersusAi" ? "Co-op vs AI: " + q.name : q.name;
+      if (queues[q.id]) return;
       queues[q.id] = name;
       select.add(new Option(name, q.id));
     });
