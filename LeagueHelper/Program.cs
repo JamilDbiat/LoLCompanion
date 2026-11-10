@@ -153,6 +153,8 @@ app.MapGet("/store/skins/{champ:int}", (int champ) => Results.Content(bot.GetCha
 app.MapPost("/store/buy/{skin:int}", (int skin) => bot.BuySkin(skin));
 app.MapGet("/sanctum", () => Results.Content(bot.GetSanctum(), "application/json"));
 app.MapPost("/buyrp", () => bot.OpenRpStore());
+app.MapGet("/store/all", () => Results.Content(bot.GetSkinStore(), "application/json"));
+app.MapPost("/icon/{id:int}", (int id) => bot.SetIcon(id));
 
 app.Start();
 

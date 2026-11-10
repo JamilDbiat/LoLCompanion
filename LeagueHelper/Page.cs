@@ -366,12 +366,30 @@ nav button b{font-size:20px}
 <div id="shopWallet" class="walletRow"></div>
 <button class="ghost" onclick="buyRp()">Buy RP (opens League on your PC)</button>
 </div>
-<div class="card"><h3>Your Shop <span class="muted" id="ysEnd"></span></h3><div id="ysGrid" class="colGrid"></div></div>
+<div class="card"><h3>Night Market <span class="muted" id="ysEnd"></span></h3><div id="ysGrid" class="colGrid"></div></div>
 <div class="card">
-<h3>Skin shop</h3>
-<input id="storeChamp" list="allChampList" placeholder="Search a champion..." onfocus="this.select()" onchange="loadStore()">
-<datalist id="allChampList"></datalist>
+<h3>Skin shop <span class="muted" id="storeCount"></span></h3>
+<input id="storeSearch" placeholder="Search skin or champion..." oninput="storeShown=60;renderSkinStore()">
+<div class="spellSlots" style="margin-top:8px">
+<select id="storeRarity" onchange="storeShown=60;renderSkinStore()">
+<option value="">All rarities</option>
+<option value="kTranscendent">Transcendent</option>
+<option value="kExalted">Exalted</option>
+<option value="kUltimate">Ultimate</option>
+<option value="kMythic">Mythic</option>
+<option value="kLegendary">Legendary</option>
+<option value="kEpic">Epic</option>
+<option value="kNoRarity">Other</option>
+</select>
+<select id="storeSort" onchange="storeShown=60;renderSkinStore()">
+<option value="new">Newest</option>
+<option value="low">Price: low to high</option>
+<option value="high">Price: high to low</option>
+<option value="name">Name</option>
+</select>
+</div>
 <div id="storeGrid" class="colGrid" style="margin-top:10px"></div>
+<button id="storeMore" class="ghost" style="display:none" onclick="storeShown+=60;renderSkinStore()">Show more</button>
 </div>
 <div class="card"><h3>Sanctum</h3><div id="sanctumBox"></div></div>
 <div class="card"><h3>Mythic Shop</h3><div class="muted">League doesn't share the Mythic Shop with other apps, so open it in the client on your PC. You have <b id="meCount">0</b> Mythic Essence.</div></div>
@@ -1519,6 +1537,8 @@ let lootItem = null;
 let lootRecipes = [];
 let ysOffers = [];
 let storeSkins = [];
+let allSkins = [];
+let storeShown = 60;
 
 function fmt(n) {
   return (n || 0).toLocaleString();
@@ -1539,7 +1559,7 @@ async function loadProfile() {
   if (!Object.keys(names).length) await loadNames();
   const s = await getJson("/summoner");
   document.getElementById("profileCard").innerHTML = s.gameName
-    ? `<img class="avatar" src="${profileIcon(s.profileIconId)}"><div class="big">${esc(s.gameName)}<span class="muted"> #${esc(s.tagLine)}</span></div><div class="muted">Level ${s.summonerLevel}</div><div class="bar"><div style="width:${s.percentCompleteForNextLevel || 0}%"></div></div><div id="profileWallet" class="walletRow"></div>`
+    ? `<img class="avatar" src="${profileIcon(s.profileIconId)}" onclick="pickIcon()" style="cursor:pointer"><div class="muted" style="font-size:12px">Tap your icon to change it</div><div class="big">${esc(s.gameName)}<span class="muted"> #${esc(s.tagLine)}</span></div><div class="muted">Level ${s.summonerLevel}</div><div class="bar"><div style="width:${s.percentCompleteForNextLevel || 0}%"></div></div><div id="profileWallet" class="walletRow"></div>`
     : `<p class="muted">Open League on your PC first.</p>`;
   if (!s.gameName) return;
   await loadWallet();
@@ -1557,6 +1577,23 @@ async function loadProfile() {
   };
   document.getElementById("rankBox").innerHTML = box("RANKED_SOLO_5x5", "Solo/Duo") + box("RANKED_FLEX_SR", "Flex");
   await loadCollection(colCat);
+}
+
+async function pickIcon() {
+  await loadCollection("icons");
+  document.getElementById("colTabs").scrollIntoView({ behavior: "smooth" });
+}
+
+async function setIcon(id) {
+  if (!confirm("Use icon #" + id + " as your profile icon?")) return;
+  const res = await fetch("/icon/" + id, { method: "POST" });
+  const result = await res.text();
+  if (result !== "ok") {
+    alert(result);
+    return;
+  }
+  flash("Icon changed ✓");
+  document.querySelector("#profileCard .avatar").src = profileIcon(id);
 }
 
 function renderColTabs() {
@@ -1619,16 +1656,18 @@ function renderCollection() {
     grid.className = "colGrid";
     if (cat === "skins") list.sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity) || a.name.localeCompare(b.name));
     if (cat === "spells") info = list.length + " spells";
+    if (cat === "icons") info = fmt(all.length) + " owned · tap one to use it";
     if (cat === "items") info = list.length + " items";
     html = list.map(x => {
       let img = ASSET(x.image);
       let label = x.name;
-      if (cat === "icons") { img = profileIcon(x); label = "#" + x; }
+      let click = "";
+      if (cat === "icons") { img = profileIcon(x); label = "#" + x; click = `onclick="setIcon(${x})"`; }
       if (cat === "wards") img = ASSET(x.wardImagePath);
       if (cat === "spells") img = PIMG(x.iconPath);
       const r = RARITY[x.rarity];
       const badge = r ? `<span class="gem" style="background:${r[1]}">${r[0]}</span>` : "";
-      return `<div class="colItem"><img loading="lazy" src="${img}">${badge}<div class="colName">${esc(label)}</div></div>`;
+      return `<div class="colItem" ${click}><img loading="lazy" src="${img}">${badge}<div class="colName">${esc(label)}</div></div>`;
     }).join("");
   }
 
@@ -1647,14 +1686,27 @@ function lootName(l) {
   return LOOT_NAMES[l.lootId] || l.itemDesc || l.localizedName || l.lootName.replace(/_/g, " ");
 }
 
+function lootSymbol(l) {
+  if (l.type === "CHEST") return "🎁";
+  if (l.lootId === "MATERIAL_key") return "🔑";
+  if (l.lootId === "MATERIAL_key_fragment") return "🧩";
+  if (l.lootId === "MATERIAL_clashtickets") return "🎟️";
+  if (l.lootId === "CURRENCY_cosmetic") return "🟠";
+  if (l.lootId === "CURRENCY_champion") return "🔷";
+  if (l.lootId === "CURRENCY_mythic") return "💜";
+  return "✦";
+}
+
 function lootImg(l) {
-  return ASSET(l.tilePath || l.splashPath || "");
+  if (l.type === "CHEST" || l.type === "MATERIAL" || l.type === "CURRENCY") return "";
+  const path = l.tilePath || l.splashPath || "";
+  return path.startsWith("/lol-game-data/assets/") ? ASSET(path) : "";
 }
 
 function lootTile(l, cls) {
   const img = lootImg(l);
-  const symbol = l.type === "CHEST" ? "🎁" : l.lootId.startsWith("MATERIAL_key") ? "🔑" : l.lootId.startsWith("CURRENCY") ? "◈" : "✦";
-  return img ? `<img loading="lazy" src="${img}">` : `<div class="lootIcon ${cls || ""}">${symbol}</div>`;
+  const fallback = `<div class="lootIcon ${cls || ""}">${lootSymbol(l)}</div>`;
+  return img ? `<img loading="lazy" src="${img}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'lootIcon',textContent:'✦'}))">` : fallback;
 }
 
 function renderLoot() {
@@ -1788,11 +1840,43 @@ async function craftLoot(i) {
 async function loadShop() {
   if (!Object.keys(names).length) await loadNames();
   await loadWallet();
-  const list = document.getElementById("allChampList");
-  if (!list.options.length)
-    Object.entries(names).sort((a, b) => a[1].localeCompare(b[1])).forEach(([id, name]) => list.appendChild(new Option(name)));
   await loadYourShop();
   await loadSanctum();
+  if (!allSkins.length) await loadSkinStore();
+}
+
+async function loadSkinStore() {
+  document.getElementById("storeGrid").innerHTML = `<div class="spinner"></div>`;
+  const data = await getJson("/store/all");
+  allSkins = Array.isArray(data) ? data : [];
+  renderSkinStore();
+}
+
+function renderSkinStore() {
+  const q = document.getElementById("storeSearch").value.toLowerCase();
+  const rarity = document.getElementById("storeRarity").value;
+  const sort = document.getElementById("storeSort").value;
+
+  let list = allSkins.filter(s => {
+    const text = (s.name + " " + (names[s.champ] || "")).toLowerCase();
+    const r = s.rarity || "kNoRarity";
+    return text.includes(q) && (!rarity || r === rarity);
+  });
+
+  if (sort === "low") list.sort((a, b) => a.price - b.price);
+  if (sort === "high") list.sort((a, b) => b.price - a.price);
+  if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
+  if (sort === "new") list.sort((a, b) => b.id % 1000 - a.id % 1000 || b.id - a.id);
+
+  storeSkins = list.slice(0, storeShown);
+  document.getElementById("storeCount").textContent = "· " + fmt(list.length) + " skins";
+  document.getElementById("storeGrid").innerHTML = storeSkins.length ? storeSkins.map((s, i) => {
+    const r = RARITY[s.rarity];
+    const badge = r ? `<span class="gem" style="background:${r[1]}">${r[0]}</span>` : "";
+    const buy = s.needChamp ? `<small class="muted">Unlock ${esc(names[s.champ] || "champion")} first</small>` : `<button class="mini green" onclick="buySkin(${i})">Buy</button>`;
+    return `<div class="colItem"><img loading="lazy" src="${ASSET(s.image)}">${badge}<div class="colName">${esc(s.name)}</div><b>${s.price} RP</b>${buy}</div>`;
+  }).join("") : `<p class="muted center">No skins found.</p>`;
+  document.getElementById("storeMore").style.display = list.length > storeShown ? "block" : "none";
 }
 
 async function loadYourShop() {
@@ -1806,7 +1890,7 @@ async function loadYourShop() {
     const pct = o.originalPrice ? Math.round(100 - o.discountPrice * 100 / o.originalPrice) : 0;
     const buy = o.owned ? `<div class="muted">Owned</div>` : `<small class="muted"><s>${o.originalPrice}</s></small> <b>${o.discountPrice} RP</b><button class="mini green" onclick="buyOffer(${i})">Buy</button>`;
     return `<div class="colItem"><img loading="lazy" src="${ASSET(o.image)}"><span class="gem" style="background:var(--gold);color:#111;text-shadow:none">-${pct}%</span><div class="colName">${esc(o.skinName || names[o.championId] || "")}</div>${buy}</div>`;
-  }).join("") : `<p class="muted center">Your Shop isn't open right now.</p>`;
+  }).join("") : `<p class="muted center">The Night Market isn't open right now.</p>`;
 }
 
 async function revealOffer(i) {
@@ -1840,26 +1924,8 @@ async function buyOffer(i) {
   }
   flash("Purchased ✓");
   colData = {};
+  allSkins = [];
   await loadShop();
-}
-
-async function loadStore() {
-  const name = document.getElementById("storeChamp").value.toLowerCase();
-  const id = Object.keys(names).find(k => names[k].toLowerCase() === name);
-  const grid = document.getElementById("storeGrid");
-  if (!id) {
-    grid.innerHTML = "";
-    return;
-  }
-
-  grid.innerHTML = `<div class="spinner"></div>`;
-  const data = await getJson("/store/skins/" + id);
-  storeSkins = Array.isArray(data) ? data : [];
-  grid.innerHTML = storeSkins.length ? storeSkins.map((s, i) => {
-    const r = RARITY[s.rarity];
-    const badge = r ? `<span class="gem" style="background:${r[1]}">${r[0]}</span>` : "";
-    return `<div class="colItem"><img loading="lazy" src="${ASSET(s.image)}">${badge}<div class="colName">${esc(s.name)}</div><b>${s.price} RP</b><button class="mini green" onclick="buySkin(${i})">Buy</button></div>`;
-  }).join("") : `<p class="muted center">No skins to buy for ${esc(names[id])}. You might own them all.</p>`;
 }
 
 async function buySkin(i) {
@@ -1874,7 +1940,7 @@ async function buySkin(i) {
   flash("Purchased ✓");
   colData = {};
   await loadWallet();
-  await loadStore();
+  await loadSkinStore();
 }
 
 async function loadSanctum() {

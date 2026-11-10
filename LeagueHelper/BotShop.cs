@@ -52,6 +52,7 @@ namespace LeagueHelper
                 return "League isn't open.";
             if (!SafeName.IsMatch(offerId))
                 return "Invalid offer.";
+            StoreCache = "";
             return ShopResult(Client.Post("/lol-yourshop/v1/offers/" + offerId + "/purchase", ""));
         }
 
@@ -109,10 +110,82 @@ namespace LeagueHelper
             return JsonSerializer.Serialize(list);
         }
 
+        private string StoreCache { get; set; } = "";
+        private DateTime StoreCacheTime { get; set; }
+
+        public string GetSkinStore()
+        {
+            if (Client == null)
+                return "[]";
+            if (StoreCache != "" && DateTime.Now - StoreCacheTime < TimeSpan.FromMinutes(5))
+                return StoreCache;
+
+            LoadSkinData();
+            HashSet<int> owned = OwnedIds("CHAMPION_SKIN");
+            HashSet<int> champions = OwnedChampions();
+            var list = new List<object>();
+
+            using JsonDocument catalog = JsonDocument.Parse(Client.Get("/lol-store/v1/catalog"));
+            if (catalog.RootElement.ValueKind != JsonValueKind.Array)
+                return "[]";
+
+            foreach (JsonElement item in catalog.RootElement.EnumerateArray())
+            {
+                if (Text(item, "inventoryType") != "CHAMPION_SKIN")
+                    continue;
+                if (!(item.TryGetProperty("active", out JsonElement active) && active.ValueKind == JsonValueKind.True))
+                    continue;
+
+                int id = item.GetProperty("itemId").GetInt32();
+                if (owned.Contains(id) || BaseSkins.Contains(id) || !SkinNames.ContainsKey(id))
+                    continue;
+
+                int price = RpPrice(item);
+                if (price <= 0)
+                    continue;
+
+                int champ = id / 1000;
+                list.Add(new
+                {
+                    id,
+                    champ,
+                    name = SkinNames[id],
+                    rarity = SkinRarities.GetValueOrDefault(id, ""),
+                    image = SkinTiles.GetValueOrDefault(id, ""),
+                    price,
+                    needChamp = !champions.Contains(champ)
+                });
+            }
+
+            StoreCache = JsonSerializer.Serialize(list);
+            StoreCacheTime = DateTime.Now;
+            return StoreCache;
+        }
+
+        private HashSet<int> OwnedChampions()
+        {
+            var ids = new HashSet<int>();
+            if (Client == null)
+                return ids;
+
+            using JsonDocument doc = JsonDocument.Parse(Client.Get("/lol-champions/v1/owned-champions-minimal"));
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return ids;
+
+            foreach (JsonElement champ in doc.RootElement.EnumerateArray())
+            {
+                if (champ.TryGetProperty("ownership", out JsonElement ownership) && ownership.GetProperty("owned").GetBoolean())
+                    ids.Add(champ.GetProperty("id").GetInt32());
+            }
+
+            return ids;
+        }
+
         public string BuySkin(int skinId)
         {
             if (Client == null)
                 return "League isn't open.";
+            StoreCache = "";
 
             int price = 0;
             using (JsonDocument catalog = JsonDocument.Parse(Client.Get("/lol-store/v1/catalog/CHAMPION_SKIN?itemIds=%5B" + skinId + "%5D")))

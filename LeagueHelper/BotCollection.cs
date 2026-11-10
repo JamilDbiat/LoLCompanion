@@ -115,6 +115,17 @@ namespace LeagueHelper
             return JsonSerializer.Serialize(list);
         }
 
+        public string SetIcon(int iconId)
+        {
+            if (Client == null)
+                return "League isn't open.";
+            if (!OwnedIds("SUMMONER_ICON").Contains(iconId))
+                return "You don't own that icon.";
+
+            Client.Put("/lol-summoner/v1/current-summoner/icon", "{\"profileIconId\":" + iconId + "}");
+            return "ok";
+        }
+
         public string GetOwnedIcons()
         {
             if (Client == null)
