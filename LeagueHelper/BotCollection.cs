@@ -99,6 +99,59 @@ namespace LeagueHelper
             return JsonSerializer.Serialize(list);
         }
 
+        public string GetChampionSkins(int championId)
+        {
+            long summonerId = MySummonerId();
+            if (Client == null || summonerId == 0)
+                return "[]";
+
+            using JsonDocument doc = JsonDocument.Parse(Client.Get("/lol-champions/v1/inventories/" + summonerId + "/champions/" + championId + "/skins"));
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return "[]";
+
+            var list = new List<object>();
+            foreach (JsonElement skin in doc.RootElement.EnumerateArray())
+            {
+                var chromas = new List<object>();
+                if (skin.TryGetProperty("chromas", out JsonElement chromaList) && chromaList.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement chroma in chromaList.EnumerateArray())
+                    {
+                        string color = "";
+                        if (chroma.TryGetProperty("colors", out JsonElement colors) && colors.ValueKind == JsonValueKind.Array && colors.GetArrayLength() > 0)
+                            color = colors[0].GetString() ?? "";
+                        chromas.Add(new
+                        {
+                            id = chroma.GetProperty("id").GetInt32(),
+                            name = Text(chroma, "name"),
+                            image = Text(chroma, "chromaPath"),
+                            color,
+                            owned = IsOwned(chroma)
+                        });
+                    }
+                }
+
+                list.Add(new
+                {
+                    id = skin.GetProperty("id").GetInt32(),
+                    name = Text(skin, "name"),
+                    image = Text(skin, "tilePath"),
+                    isBase = skin.TryGetProperty("isBase", out JsonElement b) && b.ValueKind == JsonValueKind.True,
+                    owned = IsOwned(skin),
+                    chromas
+                });
+            }
+
+            return JsonSerializer.Serialize(list);
+        }
+
+        private static bool IsOwned(JsonElement item)
+        {
+            return item.TryGetProperty("ownership", out JsonElement ownership)
+                && ownership.TryGetProperty("owned", out JsonElement owned)
+                && owned.ValueKind == JsonValueKind.True;
+        }
+
         public string GetOwnedEmotes()
         {
             if (Client == null)

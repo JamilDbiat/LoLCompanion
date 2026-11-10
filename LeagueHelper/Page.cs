@@ -461,8 +461,9 @@ nav button b{font-size:20px}
 </div>
 
 <script>
-const ASSET = p => p ? "/asset?path=" + encodeURIComponent(p) : "";
-const ICON = id => ASSET("/lol-game-data/assets/v1/champion-icons/" + id + ".png");
+const ART = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/";
+const ASSET = p => !p ? "" : p.startsWith("/lol-game-data/assets/") ? ART + p.slice(22).toLowerCase() : "/asset?path=" + encodeURIComponent(p);
+const ICON = id => ART + "v1/champion-icons/" + id + ".png";
 const PIMG = p => ASSET(p);
 const POS = {top:"Top",jungle:"Jungle",middle:"Mid",bottom:"ADC",utility:"Support"};
 const PHASES = {PLANNING:"Planning",BAN_PICK:"Ban & Pick",FINALIZATION:"Finalizing",GAME_STARTING:"Starting"};
@@ -1431,6 +1432,47 @@ let curSlots = [];
 let slotKey = "";
 let ownedSkinList = null;
 let playerNames = {};
+let skinCache = {};
+
+async function champSkins(champ) {
+  if (!skinCache[champ]) {
+    const data = await getJson("/champion/" + champ + "/skins");
+    skinCache[champ] = Array.isArray(data) ? data : [];
+  }
+  return skinCache[champ];
+}
+
+function skinLabel(champ, skinId) {
+  for (const k of skinCache[champ] || []) {
+    if (k.id === skinId) return k.isBase ? "Default skin" : k.name;
+    const c = (k.chromas || []).find(x => x.id === skinId);
+    if (c) return c.name;
+  }
+  return "Default skin";
+}
+
+async function openSkinPicker(i) {
+  const slot = curSlots[i];
+  const list = await champSkins(slot.championId);
+  const owned = list.filter(k => k.owned).length;
+  const tile = (id, name, img, isOwned, extra) => `<div class="colItem${isOwned ? "" : " faded"}" ${isOwned ? `onclick="closeSheet();updateSlot(${i},{skinId:${id}})"` : ""}>
+      <img loading="lazy" src="${ASSET(img)}" class="${id === slot.skinId ? "selected" : ""}">${extra || ""}
+      <div class="colName">${esc(name)}${isOwned ? "" : "<br>🔒 Not owned"}</div></div>`;
+
+  let html = "";
+  list.forEach(k => {
+    html += tile(k.id, k.isBase ? "Default" : k.name, k.image, k.owned);
+    (k.chromas || []).filter(c => c.owned).forEach(c => {
+      html += tile(c.id, c.name, c.image, true, `<span class="gem" style="background:${c.color || "#888"}">Chroma</span>`);
+    });
+  });
+
+  document.getElementById("sheetBody").innerHTML = `<div class="big center">${esc(names[slot.championId] || "")} skins</div>
+    <div class="muted center" style="margin-bottom:10px">You own ${owned} of ${list.length}</div>
+    <div class="colGrid">${html}</div>
+    <button class="ghost" onclick="closeSheet()">Cancel</button>`;
+  document.getElementById("sheet").classList.add("on");
+}
 
 function memberName(m) {
   if (m.gameName) return m.gameName;
@@ -1446,8 +1488,17 @@ function memberName(m) {
   return "...";
 }
 
-function openChampPicker(i) {
+let pickChamps = {};
+
+async function openChampPicker(i) {
+  const list = await getJson("/champions");
+  pickChamps = {};
+  if (Array.isArray(list))
+    list.filter(c => c.id > 0 && (c.freeToPlay || (c.ownership && c.ownership.owned)))
+      .forEach(c => pickChamps[c.name] = c.id);
+  const classic = Object.values(pickChamps).some(id => id >= 60000);
   document.getElementById("sheetBody").innerHTML = `<div class="big center">Pick a champion</div>
+    ${classic ? `<div class="muted center" style="font-size:13px;margin-bottom:6px">Your client is in League Classic mode, so these are the classic champions. Switch to the LEAGUE tab in the client for the modern ones.</div>` : ""}
     <input id="pickSearch" placeholder="Search..." oninput="renderChampPicker(${i})" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <div id="pickGrid" class="colGrid" style="margin-top:10px;grid-template-columns:repeat(auto-fill,minmax(72px,1fr))"></div>
     <button class="ghost" onclick="closeSheet()">Cancel</button>`;
@@ -1458,7 +1509,7 @@ function openChampPicker(i) {
 function renderChampPicker(i) {
   const q = document.getElementById("pickSearch").value.toLowerCase().trim();
   const taken = curSlots[i] ? curSlots[i].championId : 0;
-  document.getElementById("pickGrid").innerHTML = Object.entries(champs)
+  document.getElementById("pickGrid").innerHTML = Object.entries(pickChamps)
     .filter(([name]) => name.toLowerCase().includes(q))
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, id]) => `<div class="colItem" onclick="closeSheet();updateSlot(${i},{championId:${id},skinId:${id * 1000}})"><img loading="lazy" src="${ICON(id)}" class="${id === taken ? "selected" : ""}"><div class="colName">${esc(name)}</div></div>`)
@@ -1473,10 +1524,8 @@ async function renderSlots(slots) {
   slotKey = key;
   curSlots = slots;
 
-  if (!ownedSkinList) {
-    const data = await getJson("/collection/skins");
-    ownedSkinList = Array.isArray(data) ? data.filter(s => !s.chroma) : [];
-  }
+  if (slots.some(s => !names[s.championId])) await loadNames();
+  for (const s of slots) await champSkins(s.championId);
   if (!spellData.length) await loadSpells();
   if (!styles.length) await loadRuneData();
 
@@ -1485,9 +1534,7 @@ async function renderSlots(slots) {
 
   document.getElementById("slotList").innerHTML = slots.map((s, i) => {
     const roles = roleList.map(([v, t]) => `<option value="${v}" ${v === s.positionPreference ? "selected" : ""}>${t}</option>`).join("");
-    const skins = [`<option value="${s.championId * 1000}">Default skin</option>`]
-      .concat(ownedSkinList.filter(k => k.champ === s.championId).map(k => `<option value="${k.id}" ${k.id === s.skinId ? "selected" : ""}>${esc(k.name)}</option>`))
-      .join("");
+    const skinName = skinLabel(s.championId, s.skinId);
     const spells = n => spellList.map(sp => `<option value="${sp.id}" ${sp.id === s["spell" + n] ? "selected" : ""}>${esc(sp.name)}</option>`).join("");
     let keystone = 0;
     try { keystone = JSON.parse(s.perks || "{}").perkIds[0]; } catch (e) { }
@@ -1498,7 +1545,7 @@ async function renderSlots(slots) {
           <select onchange="updateSlot(${i},{positionPreference:this.value})">${roles}</select>
           <button class="ghost" style="margin:0;padding:12px 8px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="openChampPicker(${i})">${esc(names[s.championId] || "Champion")} ▾</button>
         </div>
-        <select style="margin-top:6px" onchange="updateSlot(${i},{skinId:+this.value})">${skins}</select>
+        <button class="ghost" style="margin:6px 0 0;padding:12px 10px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onclick="openSkinPicker(${i})">🎨 ${esc(skinName)} ▾</button>
         <div class="spellSlots" style="margin-top:6px">
           <select onchange="setSlotSpell(${i},1,+this.value)">${spells(1)}</select>
           <select onchange="setSlotSpell(${i},2,+this.value)">${spells(2)}</select>

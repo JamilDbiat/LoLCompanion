@@ -155,6 +155,7 @@ app.MapGet("/sanctum", () => Results.Content(bot.GetSanctum(), "application/json
 app.MapPost("/buyrp", () => bot.OpenRpStore());
 app.MapGet("/store/all", () => Results.Content(bot.GetSkinStore(), "application/json"));
 app.MapPost("/icon/{id:int}", (int id) => bot.SetIcon(id));
+app.MapGet("/champion/{id:int}/skins", (int id) => Results.Content(bot.GetChampionSkins(id), "application/json"));
 app.MapGet("/player/{puuid}", (string puuid) => Results.Content(bot.GetPlayer(puuid), "application/json"));
 app.MapGet("/lobby/slots", () => Results.Content(bot.GetPlayerSlots(), "application/json"));
 app.MapPost("/lobby/slots", async (HttpRequest request) =>
