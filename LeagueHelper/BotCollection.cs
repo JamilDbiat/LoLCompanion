@@ -7,6 +7,8 @@ namespace LeagueHelper
         private Dictionary<int, string> SkinRarities { get; set; } = new Dictionary<int, string>();
         private Dictionary<int, string> SkinNames { get; set; } = new Dictionary<int, string>();
         private Dictionary<int, string> SkinTiles { get; set; } = new Dictionary<int, string>();
+        private HashSet<int> BaseSkins { get; set; } = new HashSet<int>();
+        private Dictionary<int, (string Name, string Image, int Champ)> Chromas { get; set; } = new Dictionary<int, (string Name, string Image, int Champ)>();
 
         public string GetSummoner() => Client == null ? "{}" : Client.Get("/lol-summoner/v1/current-summoner");
         public string GetRanked() => Client == null ? "{}" : Client.Get("/lol-ranked/v1/current-ranked-stats");
@@ -52,35 +54,40 @@ namespace LeagueHelper
 
         public string GetOwnedSkins()
         {
-            long summonerId = MySummonerId();
-            if (Client == null || summonerId == 0)
+            if (Client == null)
                 return "[]";
 
             LoadSkinData();
             var list = new List<object>();
 
-            using JsonDocument doc = JsonDocument.Parse(Client.Get("/lol-champions/v1/inventories/" + summonerId + "/skins-minimal"));
-            if (doc.RootElement.ValueKind != JsonValueKind.Array)
-                return "[]";
-
-            foreach (JsonElement skin in doc.RootElement.EnumerateArray())
+            foreach (int id in OwnedIds("CHAMPION_SKIN"))
             {
-                if (skin.TryGetProperty("isBase", out JsonElement isBase) && isBase.GetBoolean())
-                    continue;
-                if (!skin.TryGetProperty("ownership", out JsonElement ownership) || !ownership.GetProperty("owned").GetBoolean())
-                    continue;
-
-                int id = skin.GetProperty("id").GetInt32();
-                bool chroma = Text(skin, "chromaPath") != "";
-                list.Add(new
+                if (SkinNames.ContainsKey(id))
                 {
-                    id,
-                    champ = skin.GetProperty("championId").GetInt32(),
-                    name = Text(skin, "name"),
-                    image = chroma ? Text(skin, "chromaPath") : Text(skin, "tilePath"),
-                    rarity = SkinRarities.GetValueOrDefault(id, ""),
-                    chroma
-                });
+                    if (BaseSkins.Contains(id))
+                        continue;
+                    list.Add(new
+                    {
+                        id,
+                        champ = id / 1000,
+                        name = SkinNames[id],
+                        image = SkinTiles.GetValueOrDefault(id, ""),
+                        rarity = SkinRarities.GetValueOrDefault(id, ""),
+                        chroma = false
+                    });
+                }
+                else if (Chromas.TryGetValue(id, out var chroma))
+                {
+                    list.Add(new
+                    {
+                        id,
+                        champ = chroma.Champ,
+                        name = chroma.Name,
+                        image = chroma.Image,
+                        rarity = "",
+                        chroma = true
+                    });
+                }
             }
 
             return JsonSerializer.Serialize(list);
@@ -184,6 +191,15 @@ namespace LeagueHelper
                 SkinRarities[id] = Text(entry.Value, "rarity");
                 SkinNames[id] = Text(entry.Value, "name");
                 SkinTiles[id] = Text(entry.Value, "tilePath");
+
+                if (entry.Value.TryGetProperty("isBase", out JsonElement isBase) && isBase.ValueKind == JsonValueKind.True)
+                    BaseSkins.Add(id);
+
+                if (entry.Value.TryGetProperty("chromas", out JsonElement chromas) && chromas.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement chroma in chromas.EnumerateArray())
+                        Chromas[chroma.GetProperty("id").GetInt32()] = (Text(chroma, "name"), Text(chroma, "chromaPath"), id / 1000);
+                }
             }
         }
 
