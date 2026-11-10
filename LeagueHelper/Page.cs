@@ -155,6 +155,42 @@ button:active { transform: scale(.97); }
 .msg.mine{align-self:flex-end;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff}
 .badge{background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:6px}
 .friend{cursor:pointer}
+.walletRow{display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:13px;color:var(--muted)}
+.walletRow b{color:var(--gold2);font-size:15px}
+.avatar{width:84px;height:84px;border-radius:50%;border:3px solid var(--gold);box-shadow:0 0 18px rgba(232,184,74,.4)}
+.bar{height:6px;background:#140b24;border-radius:3px;overflow:hidden;margin:8px 20px 0}
+.bar div{height:100%;background:linear-gradient(90deg,#8b5cf6,#e8b84a)}
+.rankRow{display:flex;gap:10px}
+.rankBox{flex:1;text-align:center;background:#170d2a;border:1px solid #3a2560;border-radius:12px;padding:12px}
+.tabs.scroll{overflow-x:auto}
+.tabs.scroll button{flex:0 0 auto;width:auto;padding:10px 14px}
+.colGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+#colGrid{max-height:65vh;overflow-y:auto}
+.colItem{position:relative;background:#170d2a;border:1px solid #3a2560;border-radius:12px;padding:6px;text-align:center;font-size:11px;color:var(--muted);cursor:pointer}
+.colItem img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
+.colItem .mini{width:100%;margin:6px 0 0}
+.colName{margin-top:4px;line-height:1.2;max-height:2.4em;overflow:hidden}
+.gem{position:absolute;top:8px;left:8px;font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px;color:#fff;text-shadow:0 1px 2px #000}
+.count{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;font-weight:800;font-size:11px;padding:2px 6px;border-radius:8px}
+.lootIcon{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:40px;background:linear-gradient(135deg,#2a1450,#120a1f);border-radius:8px;color:var(--gold)}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;display:none;align-items:flex-end}
+#sheet.on{display:flex}
+#sheetBody{background:#1a0f2c;border-top:2px solid var(--gold);border-radius:18px 18px 0 0;width:100%;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:80vh;overflow-y:auto;animation:sheetUp .2s}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}}
+.sheetImg{width:140px;height:140px;object-fit:cover;border-radius:16px;border:2px solid var(--gold)}
+#reveal{position:fixed;inset:0;background:radial-gradient(circle,#3a1d6e,#0b0614 70%);z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+#reveal.on{display:flex}
+.chestAnim{width:120px;height:120px;border-radius:24px;margin:24px;background:linear-gradient(135deg,#8b5cf6,#e8b84a);animation:shake .6s infinite,glow 1.2s infinite alternate}
+@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-7deg) scale(1.06)}75%{transform:rotate(7deg) scale(1.06)}}
+@keyframes glow{from{box-shadow:0 0 30px #e8b84a}to{box-shadow:0 0 90px #e8b84a,0 0 150px #8b5cf6}}
+#revealItems{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:20px 0}
+.revealTile{width:120px;color:var(--gold2);font-size:13px;font-weight:700;animation:pop .55s ease-out both}
+.revealTile img,.revealTile .lootIcon{width:120px;height:120px;object-fit:cover;border-radius:14px;border:2px solid var(--gold);box-shadow:0 0 24px rgba(232,184,74,.7);margin-bottom:6px}
+@keyframes pop{0%{transform:scale(.2) rotate(-12deg);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+.banner{height:150px;border-radius:12px;background-size:cover;background-position:center;position:relative;margin-bottom:10px;overflow:hidden}
+.bannerText{position:absolute;left:0;right:0;bottom:0;padding:10px;background:linear-gradient(transparent,rgba(0,0,0,.8))}
+nav button{font-size:11px}
+nav button b{font-size:20px}
 </style>
 </head>
 <body>
@@ -306,11 +342,48 @@ button:active { transform: scale(.97); }
 <div class="muted" id="topic"></div>
 </div>
 </section>
+
+<section id="tab-profile" class="tab">
+<div class="card center" id="profileCard"><div class="spinner"></div></div>
+<div class="card"><h3>Ranked</h3><div id="rankBox" class="rankRow"></div></div>
+<div class="card">
+<h3>Collection</h3>
+<div class="tabs scroll" id="colTabs"></div>
+<input id="colSearch" placeholder="Search..." oninput="renderCollection()">
+<div id="colInfo" class="muted center" style="margin:8px 0"></div>
+<div id="colGrid" class="colGrid"></div>
+</div>
+</section>
+
+<section id="tab-loot" class="tab">
+<div class="card"><h3>Hextech Crafting</h3><div id="lootWallet" class="walletRow"></div></div>
+<div class="card"><div id="lootList"><div class="spinner"></div></div></div>
+</section>
+
+<section id="tab-shop" class="tab">
+<div class="card">
+<h3>Wallet</h3>
+<div id="shopWallet" class="walletRow"></div>
+<button class="ghost" onclick="buyRp()">Buy RP (opens League on your PC)</button>
+</div>
+<div class="card"><h3>Your Shop <span class="muted" id="ysEnd"></span></h3><div id="ysGrid" class="colGrid"></div></div>
+<div class="card">
+<h3>Skin shop</h3>
+<input id="storeChamp" list="allChampList" placeholder="Search a champion..." onfocus="this.select()" onchange="loadStore()">
+<datalist id="allChampList"></datalist>
+<div id="storeGrid" class="colGrid" style="margin-top:10px"></div>
+</div>
+<div class="card"><h3>Sanctum</h3><div id="sanctumBox"></div></div>
+<div class="card"><h3>Mythic Shop</h3><div class="muted">League doesn't share the Mythic Shop with other apps, so open it in the client on your PC. You have <b id="meCount">0</b> Mythic Essence.</div></div>
+</section>
 </main>
 
 <nav>
 <button data-tab="play" class="on" onclick="tab('play')"><b>⚔</b>Play</button>
 <button data-tab="runes" onclick="tab('runes')"><b>✦</b>Runes</button>
+<button data-tab="profile" onclick="tab('profile')"><b>♛</b>Profile</button>
+<button data-tab="loot" onclick="tab('loot')"><b>❖</b>Loot</button>
+<button data-tab="shop" onclick="tab('shop')"><b>◆</b>Shop</button>
 <button data-tab="settings" onclick="tab('settings')"><b>⚙</b>Settings</button>
 </nav>
 <div id="saved" class="toast"></div>
@@ -326,6 +399,15 @@ button:active { transform: scale(.97); }
 <input id="dmInput" placeholder="Message..." onkeydown="if(event.key==='Enter')sendDm()">
 <button onclick="sendDm()">Send</button>
 </div>
+</div>
+
+<div id="sheet" onclick="if(event.target===this)closeSheet()"><div id="sheetBody"></div></div>
+
+<div id="reveal">
+<div id="revealTitle" class="big"></div>
+<div id="revealChest" class="chestAnim"></div>
+<div id="revealItems"></div>
+<button id="revealClose" class="green" style="display:none;max-width:260px" onclick="hideReveal()">Nice!</button>
 </div>
 
 <script>
@@ -393,6 +475,9 @@ function tab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
   window.scrollTo(0, 0);
+  if (name === "profile") loadProfile();
+  if (name === "loot") loadLoot();
+  if (name === "shop") loadShop();
 }
 
 async function syncClock() {
@@ -1418,6 +1503,397 @@ function setRoles() {
   const select = document.getElementById(id);
   ROLES.forEach(([value, text]) => select.add(new Option(text, value)));
 });
+
+const COL_CATS = [["mastery", "Mastery"], ["skins", "Skins"], ["chromas", "Chromas"], ["emotes", "Emotes"], ["icons", "Icons"], ["wards", "Wards"], ["spells", "Spells"], ["items", "Items"]];
+const RARITY = {kRare: ["Rare", "#5fbf4a"], kEpic: ["Epic", "#26a5ff"], kLegendary: ["Legendary", "#ff4d4d"], kMythic: ["Mythic", "#b44dff"], kUltimate: ["Ultimate", "#ff9a2e"], kTranscendent: ["Transcendent", "#8f8fff"], kExalted: ["Exalted", "#2ec4b6"]};
+const RARITY_ORDER = ["kTranscendent", "kExalted", "kUltimate", "kMythic", "kLegendary", "kEpic", "kRare", "kNoRarity", ""];
+const TIER_COLORS = {IRON: "#8c7b75", BRONZE: "#c08a5b", SILVER: "#a8b5c2", GOLD: "#e8b84a", PLATINUM: "#4fd1c5", EMERALD: "#2ecc71", DIAMOND: "#6aa6ff", MASTER: "#c56bff", GRANDMASTER: "#ff4d4d", CHALLENGER: "#f5d27a"};
+const LOOT_GROUPS = [["CHEST", "Chests & keys"], ["CHAMPION", "Champion shards"], ["SKIN", "Skin shards"], ["WARDSKIN", "Ward skin shards"], ["EMOTE", "Emotes"], ["SUMMONERICON", "Icons"], ["ETERNALS", "Eternals"], ["OTHER", "Other"]];
+const LOOT_NAMES = {CURRENCY_cosmetic: "Orange Essence", CURRENCY_champion: "Blue Essence", CURRENCY_mythic: "Mythic Essence", CURRENCY_RP: "RP", MATERIAL_key: "Hextech Key", MATERIAL_key_fragment: "Key Fragment", MATERIAL_clashtickets: "Clash Ticket"};
+
+let colCat = "skins";
+let colData = {};
+let walletData = {};
+let lootData = [];
+let lootItem = null;
+let lootRecipes = [];
+let ysOffers = [];
+let storeSkins = [];
+
+function fmt(n) {
+  return (n || 0).toLocaleString();
+}
+
+async function loadWallet() {
+  walletData = await getJson("/wallet");
+  const w = walletData;
+  const html = `<span><b>${fmt(w.rp)}</b> RP</span><span><b>${fmt(w.be)}</b> BE</span><span><b>${fmt(w.oe)}</b> OE</span><span><b>${fmt(w.me)}</b> ME</span><span><b>${fmt(w.keys)}</b> Keys</span>`;
+  ["profileWallet", "lootWallet", "shopWallet"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+  document.getElementById("meCount").textContent = fmt(w.me);
+}
+
+async function loadProfile() {
+  if (!Object.keys(names).length) await loadNames();
+  const s = await getJson("/summoner");
+  document.getElementById("profileCard").innerHTML = s.gameName
+    ? `<img class="avatar" src="${profileIcon(s.profileIconId)}"><div class="big">${esc(s.gameName)}<span class="muted"> #${esc(s.tagLine)}</span></div><div class="muted">Level ${s.summonerLevel}</div><div class="bar"><div style="width:${s.percentCompleteForNextLevel || 0}%"></div></div><div id="profileWallet" class="walletRow"></div>`
+    : `<p class="muted">Open League on your PC first.</p>`;
+  if (!s.gameName) return;
+  await loadWallet();
+
+  const r = await getJson("/ranked");
+  const queues = r.queueMap || {};
+  const box = (key, title) => {
+    const e = queues[key] || {};
+    const ranked = e.tier && e.tier !== "NONE" && e.tier !== "";
+    const apex = ["MASTER", "GRANDMASTER", "CHALLENGER"].includes(e.tier);
+    const tier = ranked ? e.tier.charAt(0) + e.tier.slice(1).toLowerCase() + (apex ? "" : " " + e.division) : "Unranked";
+    const games = (e.wins || 0) + (e.losses || 0);
+    const rate = games ? Math.round(e.wins * 100 / games) + "%" : "-";
+    return `<div class="rankBox"><div class="muted">${title}</div><div class="big" style="color:${TIER_COLORS[e.tier] || "var(--gold2)"}">${tier}</div><div>${ranked ? (e.leaguePoints || 0) + " LP" : "&nbsp;"}</div><small class="muted">${e.wins || 0}W ${e.losses || 0}L · ${rate}</small></div>`;
+  };
+  document.getElementById("rankBox").innerHTML = box("RANKED_SOLO_5x5", "Solo/Duo") + box("RANKED_FLEX_SR", "Flex");
+  await loadCollection(colCat);
+}
+
+function renderColTabs() {
+  document.getElementById("colTabs").innerHTML = COL_CATS
+    .map(([key, title]) => `<button class="${key === colCat ? "on" : ""}" onclick="loadCollection('${key}')">${title}</button>`)
+    .join("");
+}
+
+async function loadCollection(cat) {
+  colCat = cat;
+  renderColTabs();
+  document.getElementById("colSearch").value = "";
+
+  if (!colData[cat]) {
+    document.getElementById("colGrid").innerHTML = `<div class="spinner"></div>`;
+    if (cat === "skins" || cat === "chromas") {
+      const all = await getJson("/collection/skins");
+      const list = Array.isArray(all) ? all : [];
+      colData.skins = list.filter(x => !x.chroma);
+      colData.chromas = list.filter(x => x.chroma);
+    } else if (cat === "mastery") {
+      colData.mastery = await getJson("/mastery");
+    } else if (cat === "emotes") {
+      colData.emotes = await getJson("/collection/emotes");
+    } else if (cat === "icons") {
+      colData.icons = await getJson("/collection/icons");
+    } else if (cat === "items") {
+      colData.items = await getJson("/collection/items");
+    } else if (cat === "wards") {
+      const all = await getJson("/wards");
+      colData.wards = Array.isArray(all) ? all.filter(w => w.id === 0 || (w.ownership && w.ownership.owned)) : [];
+    } else if (cat === "spells") {
+      if (!spellData.length) await loadSpells();
+      colData.spells = spellData;
+    }
+    if (!Array.isArray(colData[cat])) colData[cat] = [];
+  }
+
+  renderCollection();
+}
+
+function renderCollection() {
+  const q = document.getElementById("colSearch").value.toLowerCase();
+  const cat = colCat;
+  const all = colData[cat] || [];
+  const nameOf = x => cat === "mastery" ? (names[x.championId] || "") : cat === "icons" ? String(x) : (x.name || "");
+  let list = all.filter(x => nameOf(x).toLowerCase().includes(q));
+  const grid = document.getElementById("colGrid");
+  let info = fmt(all.length) + " owned";
+  let html = "";
+
+  if (cat === "mastery") {
+    info = "Total mastery level " + fmt(all.reduce((a, m) => a + (m.championLevel || 0), 0)) + " · " + all.length + " champions";
+    grid.className = "";
+    html = list
+      .sort((a, b) => b.championPoints - a.championPoints)
+      .map(m => `<div class="rec"><img class="icon" loading="lazy" src="${ICON(m.championId)}"><div style="flex:1"><b>${esc(names[m.championId] || "")}</b><br><small class="muted">Level ${m.championLevel} · ${fmt(m.championPoints)} pts${m.highestGrade ? " · " + esc(m.highestGrade) : ""}</small></div></div>`)
+      .join("");
+  } else {
+    grid.className = "colGrid";
+    if (cat === "skins") list.sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity) || a.name.localeCompare(b.name));
+    if (cat === "spells") info = list.length + " spells";
+    if (cat === "items") info = list.length + " items";
+    html = list.map(x => {
+      let img = ASSET(x.image);
+      let label = x.name;
+      if (cat === "icons") { img = profileIcon(x); label = "#" + x; }
+      if (cat === "wards") img = ASSET(x.wardImagePath);
+      if (cat === "spells") img = PIMG(x.iconPath);
+      const r = RARITY[x.rarity];
+      const badge = r ? `<span class="gem" style="background:${r[1]}">${r[0]}</span>` : "";
+      return `<div class="colItem"><img loading="lazy" src="${img}">${badge}<div class="colName">${esc(label)}</div></div>`;
+    }).join("");
+  }
+
+  document.getElementById("colInfo").textContent = info;
+  grid.innerHTML = html || `<p class="muted center">Nothing here.</p>`;
+}
+
+async function loadLoot() {
+  await loadWallet();
+  const data = await getJson("/loot");
+  lootData = Array.isArray(data) ? data : [];
+  renderLoot();
+}
+
+function lootName(l) {
+  return LOOT_NAMES[l.lootId] || l.itemDesc || l.localizedName || l.lootName.replace(/_/g, " ");
+}
+
+function lootImg(l) {
+  return ASSET(l.tilePath || l.splashPath || "");
+}
+
+function lootTile(l, cls) {
+  const img = lootImg(l);
+  const symbol = l.type === "CHEST" ? "🎁" : l.lootId.startsWith("MATERIAL_key") ? "🔑" : l.lootId.startsWith("CURRENCY") ? "◈" : "✦";
+  return img ? `<img loading="lazy" src="${img}">` : `<div class="lootIcon ${cls || ""}">${symbol}</div>`;
+}
+
+function renderLoot() {
+  const groups = {};
+  lootData.filter(l => l.type !== "CURRENCY" && l.count > 0).forEach(l => {
+    let g = l.displayCategories || (l.type === "CHEST" || l.lootId.startsWith("MATERIAL_key") ? "CHEST" : "OTHER");
+    if (!LOOT_GROUPS.some(x => x[0] === g)) g = "OTHER";
+    (groups[g] = groups[g] || []).push(l);
+  });
+
+  let html = "";
+  LOOT_GROUPS.forEach(([g, title]) => {
+    const list = groups[g];
+    if (!list) return;
+    const total = list.reduce((a, l) => a + l.count, 0);
+    html += `<div class="label" style="text-align:left">${title} (${total})</div><div class="colGrid">`;
+    html += list.map(l => `<div class="colItem" onclick="openLoot('${encodeURIComponent(l.lootId)}')">${lootTile(l)}${l.count > 1 ? `<span class="count">x${l.count}</span>` : ""}<div class="colName">${esc(lootName(l))}</div></div>`).join("");
+    html += `</div>`;
+  });
+
+  document.getElementById("lootList").innerHTML = html || `<p class="muted center">Your loot is empty.</p>`;
+}
+
+function essenceName(id) {
+  return {CURRENCY_cosmetic: "OE", CURRENCY_champion: "BE", CURRENCY_mythic: "ME"}[id] || "";
+}
+
+function recipeLabel(r, l) {
+  if (r.type === "DISENCHANT") return "Disenchant (+" + fmt(l.disenchantValue) + " " + essenceName(l.disenchantLootName) + ")";
+  if (r.type === "UPGRADE") return "Unlock (" + fmt(l.upgradeEssenceValue) + " " + essenceName(l.upgradeEssenceName) + ")";
+  if (r.type === "REROLL") return "Reroll (uses 3 shards)";
+  if (r.type === "OPEN") return "Open";
+  return r.contextMenuText || r.description || r.recipeName.replace(/_/g, " ");
+}
+
+function pickLoot(r, l) {
+  const counts = {};
+  lootData.forEach(x => counts[x.lootId] = x.count);
+  const ids = [];
+  for (const slot of r.slots || []) {
+    const options = (slot.lootIds || []).includes(l.lootId) ? [l.lootId, ...slot.lootIds.filter(x => x !== l.lootId)] : (slot.lootIds || []);
+    let pick = null;
+    for (const id of options) {
+      const need = id.startsWith("CURRENCY_") || id.startsWith("MATERIAL_") ? (slot.quantity || 1) : 1;
+      if ((counts[id] || 0) >= need) {
+        pick = id;
+        counts[id] -= need;
+        break;
+      }
+    }
+    if (!pick) return null;
+    ids.push(pick);
+  }
+  return ids.length ? ids : null;
+}
+
+async function openLoot(encodedId) {
+  const id = decodeURIComponent(encodedId);
+  const l = lootData.find(x => x.lootId === id);
+  if (!l) return;
+  lootItem = l;
+
+  const data = await getJson("/loot/recipes/" + encodeURIComponent(id));
+  lootRecipes = Array.isArray(data) ? data : [];
+
+  const buttons = lootRecipes.map((r, i) => {
+    const ok = !!pickLoot(r, l);
+    const color = r.type === "DISENCHANT" ? "red" : (r.type === "OPEN" || r.type === "UPGRADE") ? "green" : "";
+    return `<button class="${color}" ${ok ? "" : "disabled style='opacity:.4'"} onclick="craftLoot(${i})">${esc(recipeLabel(r, l))}${ok ? "" : " · not enough"}</button>`;
+  }).join("");
+
+  document.getElementById("sheetBody").innerHTML = `<div class="center">${lootImg(l) ? `<img class="sheetImg" src="${lootImg(l)}">` : lootTile(l)}<div class="big">${esc(lootName(l))}</div><div class="muted">${esc(l.type.replace(/_/g, " ").toLowerCase())}${l.count > 1 ? " · x" + l.count : ""}</div></div>${buttons || `<p class="muted center">Nothing to craft with this.</p>`}<button class="ghost" onclick="closeSheet()">Close</button>`;
+  document.getElementById("sheet").classList.add("on");
+}
+
+function closeSheet() {
+  document.getElementById("sheet").classList.remove("on");
+}
+
+function showReveal(text) {
+  document.getElementById("revealTitle").textContent = text;
+  document.getElementById("revealChest").style.display = "block";
+  document.getElementById("revealItems").innerHTML = "";
+  document.getElementById("revealClose").style.display = "none";
+  document.getElementById("reveal").classList.add("on");
+}
+
+function hideReveal() {
+  document.getElementById("reveal").classList.remove("on");
+}
+
+function revealItems(got) {
+  document.getElementById("revealChest").style.display = "none";
+  document.getElementById("revealTitle").textContent = got.length ? "You got" : "Done ✓";
+  document.getElementById("revealItems").innerHTML = got.map((a, i) => {
+    const l = a.playerLoot;
+    const amount = a.deltaCount > 1 ? " +" + fmt(a.deltaCount) : "";
+    return `<div class="revealTile" style="animation-delay:${i * 0.25}s">${lootTile(l)}<div>${esc(lootName(l))}${amount}</div></div>`;
+  }).join("");
+  document.getElementById("revealClose").style.display = "block";
+  if (navigator.vibrate) navigator.vibrate(120);
+}
+
+async function craftLoot(i) {
+  const r = lootRecipes[i];
+  const l = lootItem;
+  const ids = pickLoot(r, l);
+  if (!ids) return;
+  if (!confirm(recipeLabel(r, l) + ": " + lootName(l) + "?\n\nThis can't be undone.")) return;
+
+  closeSheet();
+  const opening = r.type === "OPEN" || l.type === "CHEST";
+  showReveal(opening ? "Opening..." : "Crafting...");
+
+  const res = await fetch("/loot/craft/" + encodeURIComponent(r.recipeName) + "?repeat=1", { method: "POST", body: JSON.stringify(ids) });
+  const result = await res.json();
+  await new Promise(x => setTimeout(x, opening ? 1600 : 700));
+
+  if (result.error) {
+    hideReveal();
+    alert(result.error);
+    return;
+  }
+
+  const got = [...(result.added || []), ...(result.redeemed || [])].filter(a => a.playerLoot && (a.deltaCount || 0) > 0);
+  revealItems(got);
+  colData = {};
+  await loadLoot();
+}
+
+async function loadShop() {
+  if (!Object.keys(names).length) await loadNames();
+  await loadWallet();
+  const list = document.getElementById("allChampList");
+  if (!list.options.length)
+    Object.entries(names).sort((a, b) => a[1].localeCompare(b[1])).forEach(([id, name]) => list.appendChild(new Option(name)));
+  await loadYourShop();
+  await loadSanctum();
+}
+
+async function loadYourShop() {
+  const data = await getJson("/yourshop");
+  ysOffers = Array.isArray(data) ? data : [];
+  const end = ysOffers[0] && ysOffers[0].expirationDate;
+  document.getElementById("ysEnd").textContent = end ? "· ends " + new Date(end).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
+
+  document.getElementById("ysGrid").innerHTML = ysOffers.length ? ysOffers.map((o, i) => {
+    if (!o.revealed) return `<div class="colItem" onclick="revealOffer(${i})"><div class="lootIcon">?</div><div class="colName">Tap to reveal</div></div>`;
+    const pct = o.originalPrice ? Math.round(100 - o.discountPrice * 100 / o.originalPrice) : 0;
+    const buy = o.owned ? `<div class="muted">Owned</div>` : `<small class="muted"><s>${o.originalPrice}</s></small> <b>${o.discountPrice} RP</b><button class="mini green" onclick="buyOffer(${i})">Buy</button>`;
+    return `<div class="colItem"><img loading="lazy" src="${ASSET(o.image)}"><span class="gem" style="background:var(--gold);color:#111;text-shadow:none">-${pct}%</span><div class="colName">${esc(o.skinName || names[o.championId] || "")}</div>${buy}</div>`;
+  }).join("") : `<p class="muted center">Your Shop isn't open right now.</p>`;
+}
+
+async function revealOffer(i) {
+  const res = await fetch("/yourshop/" + encodeURIComponent(ysOffers[i].id) + "/reveal", { method: "POST" });
+  const result = await res.text();
+  if (result !== "ok") {
+    alert(result);
+    return;
+  }
+  flash("Revealed ✨");
+  await loadYourShop();
+}
+
+async function confirmPurchase(name, price) {
+  await loadWallet();
+  if ((walletData.rp || 0) < price) {
+    alert("Not enough RP. " + name + " costs " + price + " RP and you have " + fmt(walletData.rp) + ".");
+    return false;
+  }
+  return confirm("Buy " + name + " for " + price + " RP?\n\nYou have " + fmt(walletData.rp) + " RP. This spends real RP on your account.");
+}
+
+async function buyOffer(i) {
+  const o = ysOffers[i];
+  if (!(await confirmPurchase(o.skinName, o.discountPrice))) return;
+  const res = await fetch("/yourshop/" + encodeURIComponent(o.id) + "/buy", { method: "POST" });
+  const result = await res.text();
+  if (result !== "ok") {
+    alert(result);
+    return;
+  }
+  flash("Purchased ✓");
+  colData = {};
+  await loadShop();
+}
+
+async function loadStore() {
+  const name = document.getElementById("storeChamp").value.toLowerCase();
+  const id = Object.keys(names).find(k => names[k].toLowerCase() === name);
+  const grid = document.getElementById("storeGrid");
+  if (!id) {
+    grid.innerHTML = "";
+    return;
+  }
+
+  grid.innerHTML = `<div class="spinner"></div>`;
+  const data = await getJson("/store/skins/" + id);
+  storeSkins = Array.isArray(data) ? data : [];
+  grid.innerHTML = storeSkins.length ? storeSkins.map((s, i) => {
+    const r = RARITY[s.rarity];
+    const badge = r ? `<span class="gem" style="background:${r[1]}">${r[0]}</span>` : "";
+    return `<div class="colItem"><img loading="lazy" src="${ASSET(s.image)}">${badge}<div class="colName">${esc(s.name)}</div><b>${s.price} RP</b><button class="mini green" onclick="buySkin(${i})">Buy</button></div>`;
+  }).join("") : `<p class="muted center">No skins to buy for ${esc(names[id])}. You might own them all.</p>`;
+}
+
+async function buySkin(i) {
+  const s = storeSkins[i];
+  if (!(await confirmPurchase(s.name, s.price))) return;
+  const res = await fetch("/store/buy/" + s.id, { method: "POST" });
+  const result = await res.text();
+  if (result !== "ok") {
+    alert(result);
+    return;
+  }
+  flash("Purchased ✓");
+  colData = {};
+  await loadWallet();
+  await loadStore();
+}
+
+async function loadSanctum() {
+  const data = await getJson("/sanctum");
+  const list = Array.isArray(data) ? data : [];
+  document.getElementById("sanctumBox").innerHTML = list.length
+    ? list.map(b => `<div class="banner" style="background-image:url('${ASSET(b.image)}')"><div class="bannerText"><b>${esc(b.skin)}</b><br><small>${esc(b.currency)} · pity ${b.pity}${b.threshold ? " / " + b.threshold : ""}${b.end ? " · ends " + new Date(b.end * 1000).toLocaleDateString() : ""}</small></div></div>`).join("") + `<p class="muted">Sanctum rolls happen in the League client on your PC.</p>`
+    : `<p class="muted center">No Sanctum banners right now.</p>`;
+}
+
+async function buyRp() {
+  const res = await fetch("/buyrp", { method: "POST" });
+  const result = await res.text();
+  if (result !== "ok") {
+    alert(result);
+    return;
+  }
+  alert("League is open on your PC. Click the + next to your RP at the top right to buy RP there.");
+}
 
 if (location.hostname === "localhost") show("qrBox", true);
 

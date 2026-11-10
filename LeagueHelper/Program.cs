@@ -130,6 +130,29 @@ app.MapPost("/dm", async (string id, HttpRequest request) =>
     string text = await new StreamReader(request.Body).ReadToEndAsync();
     return bot.SendDirectMessage(id, text);
 });
+app.MapGet("/summoner", () => Results.Content(bot.GetSummoner(), "application/json"));
+app.MapGet("/ranked", () => Results.Content(bot.GetRanked(), "application/json"));
+app.MapGet("/mastery", () => Results.Content(bot.GetMastery(), "application/json"));
+app.MapGet("/wallet", () => Results.Content(bot.GetWallet(), "application/json"));
+app.MapGet("/collection/skins", () => Results.Content(bot.GetOwnedSkins(), "application/json"));
+app.MapGet("/collection/emotes", () => Results.Content(bot.GetOwnedEmotes(), "application/json"));
+app.MapGet("/collection/icons", () => Results.Content(bot.GetOwnedIcons(), "application/json"));
+app.MapGet("/collection/items", () => Results.Content(bot.GetItems(), "application/json"));
+app.MapGet("/loot", () => Results.Content(bot.GetLoot(), "application/json"));
+app.MapGet("/loot/recipes/{lootId}", (string lootId) => Results.Content(bot.GetRecipes(lootId), "application/json"));
+app.MapPost("/loot/craft/{recipe}", async (string recipe, HttpRequest request) =>
+{
+    string ids = await new StreamReader(request.Body).ReadToEndAsync();
+    int repeat = int.TryParse(request.Query["repeat"], out int r) ? r : 1;
+    return Results.Content(bot.Craft(recipe, ids, repeat), "application/json");
+});
+app.MapGet("/yourshop", () => Results.Content(bot.GetYourShop(), "application/json"));
+app.MapPost("/yourshop/{id}/reveal", (string id) => bot.RevealOffer(id));
+app.MapPost("/yourshop/{id}/buy", (string id) => bot.BuyOffer(id));
+app.MapGet("/store/skins/{champ:int}", (int champ) => Results.Content(bot.GetChampionStore(champ), "application/json"));
+app.MapPost("/store/buy/{skin:int}", (int skin) => bot.BuySkin(skin));
+app.MapGet("/sanctum", () => Results.Content(bot.GetSanctum(), "application/json"));
+app.MapPost("/buyrp", () => bot.OpenRpStore());
 
 app.Start();
 

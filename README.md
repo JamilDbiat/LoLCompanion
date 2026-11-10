@@ -8,6 +8,10 @@ Control League of Legends from your phone. Accept matches, ban, pick, set runes,
 - **Auto accept** – never miss a queue pop
 - **Lobby from your phone** – pick a game mode, choose your roles, find a match or cancel
 - **Friends & party** – see who's online, invite friends, join parties you're invited to, kick players
+- **Messages** – chat with friends and get a notification when someone messages you
+- **Profile** – rank, mastery, and your whole collection: skins, chromas, emotes, icons, wards, spells, items
+- **Hextech crafting** – open chests, disenchant, unlock and reroll shards, with a confirmation before every craft
+- **Shop** – Your Shop offers, buy skins with RP (always asks first), Sanctum banners and your wallet
 - **Full champ select on your phone** – bans, picks, teammates, timer, trades and swaps
 - **Runes** – use your saved pages, League's recommended pages, or build your own in the editor
 - **Summoner spells** – change them live, shown with your own keybinds
