@@ -1255,7 +1255,7 @@ function renderFriends() {
 
   document.getElementById("friendList").innerHTML = list.length ? list.map(f => {
     const off = f.availability === "offline" || f.availability === "mobile";
-    const button = inLobby && !off ? `<button class="mini" onclick="invite(${f.summonerId})">Invite</button>` : "";
+    const button = off ? "" : `<button class="mini" onclick="invite(${f.summonerId})">Invite</button>`;
     return `<div class="slot${off ? " faded" : ""}"><img class="icon" src="${profileIcon(f.icon)}"><div style="flex:1"><b>${esc(f.gameName || f.name || "Friend")}</b><br><small>${friendStatus(f)}</small></div>${button}</div>`;
   }).join("") : `<p class="muted">No friends found.</p>`;
 }
@@ -1287,10 +1287,11 @@ async function act(url, okText) {
   const result = await res.text();
   if (result !== "ok") {
     alert(result);
-    return;
+    return false;
   }
   if (okText) flash(okText);
   refresh();
+  return true;
 }
 
 function createLobby() {
@@ -1305,7 +1306,13 @@ function findMatch() {
   act(searching ? "/lobby/cancel" : "/lobby/search", "");
 }
 
-function invite(id) {
+async function invite(id) {
+  if (!inLobby) {
+    const created = await act("/lobby/create/" + document.getElementById("queueSelect").value, "");
+    if (!created) return;
+    inLobby = true;
+    await new Promise(r => setTimeout(r, 800));
+  }
   act("/lobby/invite/" + id, "Invite sent ✓");
 }
 
