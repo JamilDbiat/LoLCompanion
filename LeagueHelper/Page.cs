@@ -2648,7 +2648,7 @@ function tickYourShop() {
   if (ysEndAt && ysEndAt > now) el.textContent = "· ⏳ ends in " + fmtLeft(ysEndAt - now);
   else if (ysStartAt && ysStartAt > now) el.textContent = "· opens in " + fmtLeft(ysStartAt - now);
   else if (ysEndAt) el.textContent = "· ended";
-  else el.textContent = "";
+  else el.textContent = ysOffers.length ? "" : "· 🔒 closed";
 }
 
 async function loadYourShop() {
@@ -2667,7 +2667,7 @@ async function loadYourShop() {
     const pct = o.originalPrice ? Math.round(100 - o.discountPrice * 100 / o.originalPrice) : 0;
     const buy = o.owned ? `<div class="muted">Owned</div>` : `<small class="muted"><s>${o.originalPrice}</s></small> <b>${o.discountPrice} RP</b><button class="mini green" onclick="event.stopPropagation();buyOffer(${i})">Buy</button>`;
     return `<div class="colItem" onclick="openViewer('ys',${i})"><img loading="lazy" src="${ASSET(o.image)}"><span class="gem" style="background:var(--gold);color:#111;text-shadow:none">-${pct}%</span><div class="colName">${esc(o.skinName || names[o.championId] || "")}</div>${buy}</div>`;
-  }).join("") : `<p class="muted center">The Night Market isn't open right now.</p>`;
+  }).join("") : `<p class="muted center">The Night Market isn't open right now. Riot runs it a few times a year. When it opens, your offers and a live countdown will show up here.</p>`;
 }
 
 async function revealOffer(i) {
