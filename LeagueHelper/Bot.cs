@@ -102,7 +102,7 @@ namespace LeagueHelper
                     {
                         if (action.Value.Type == "pick" && AutoPick)
                         {
-                            client.Patch("/lol-champ-select/v1/session/actions/" + action.Value.Id, $"{{\"championId\":{ChampionId},\"completed\":true}}");
+                            CompleteAction(client, action.Value.Id, ChampionId);
                             Status = "Champion locked";
                         }
                         else if (action.Value.Id != lastTurnId)
@@ -330,14 +330,33 @@ namespace LeagueHelper
                 Client.Patch("/lol-champ-select/v1/session/actions/" + action.Value.Id, $"{{\"championId\":{championId}}}");
         }
 
-        public void Lock(int championId)
+        public string Lock(int championId)
         {
             if (Client == null)
-                return;
+                return "League isn't open.";
 
             var action = FindMyAction(Client, false);
-            if (action != null)
-                Client.Patch("/lol-champ-select/v1/session/actions/" + action.Value.Id, $"{{\"championId\":{championId},\"completed\":true}}");
+            if (action == null)
+                return "It's not your turn yet.";
+
+            return CompleteAction(Client, action.Value.Id, championId);
+        }
+
+        private string CompleteAction(LeagueClient client, int actionId, int championId)
+        {
+            string url = "/lol-champ-select/v1/session/actions/" + actionId;
+            string hover = client.Patch(url, $"{{\"championId\":{championId}}}");
+            if (hover.Contains("errorCode"))
+                return "League said: " + ErrorMessage(hover);
+
+            string result = client.Post(url + "/complete", "");
+            if (result.Contains("errorCode"))
+                result = client.Patch(url, $"{{\"championId\":{championId},\"completed\":true}}");
+
+            if (result.Contains("errorCode"))
+                return "League said: " + ErrorMessage(result);
+
+            return "ok";
         }
 
         public void SetSkin(int skinId)

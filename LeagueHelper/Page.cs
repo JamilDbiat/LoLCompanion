@@ -1422,7 +1422,12 @@ async function lockIn() {
     alert("Pick a champion first");
     return;
   }
-  await fetch("/lock/" + selected, { method: "POST" });
+  const result = await (await fetch("/lock/" + selected, { method: "POST" })).text();
+  if (result !== "ok") {
+    alert(result);
+    return;
+  }
+  flash(gridType === "ban" ? "Banned ✓" : "Locked in ✓");
   selected = 0;
 }
 
