@@ -7,6 +7,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AssemblyName>LoLCompanion</AssemblyName>
+		<Version>1.1.0</Version>
 		<RootNamespace>LeagueHelper</RootNamespace>
 	</PropertyGroup>
 
